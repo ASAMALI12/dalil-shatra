@@ -1,0 +1,6 @@
+{
+  "name": "دليل الشطرة - تطبيق الأقسام والعروض والإعلانات",
+  "description": "تطبيق متكامل لدليل مدينة الشطرة يشمل الأطباء والمطاعم والمحلات والخدمات والعروض والتخفيضات مع نظام إعلانات متطور.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
