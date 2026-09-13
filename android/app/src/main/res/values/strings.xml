@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">دليل العراق</string>
+    <string name="title_activity_main">دليل العراق</string>
+    <string name="package_name">com.daliliraq.app</string>
+    <string name="custom_url_scheme">com.daliliraq.app</string>
+</resources>
