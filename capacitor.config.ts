@@ -5,6 +5,7 @@ const config: CapacitorConfig = {
   appName: 'دليل العراق',
   webDir: 'dist',
   server: {
+    url: 'https://asamali12.github.io/dalil-shatra/',
     androidScheme: 'https',
     cleartext: true,
   },
