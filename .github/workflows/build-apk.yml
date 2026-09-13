@@ -16,19 +16,13 @@ jobs:
       with:
         node-version: 20
 
-    - name: Install Dependencies
+    - name: Install Dependencies & Build Web
       run: |
-        npm install --include=optional
-        npm rebuild
+        npm install
+        npm run build
 
-    - name: Build Web Project
-      run: npm run build
-
-    - name: Setup Capacitor Android
+    - name: Sync Capacitor
       run: |
-        npm install @capacitor/core @capacitor/cli @capacitor/android
-        npx cap init DalilShatra com.dalil.shatra --web-dir dist
-        npx cap add android || true
         npx cap sync android
 
     - name: Set up JDK 17
