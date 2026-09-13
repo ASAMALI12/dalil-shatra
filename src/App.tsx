@@ -25,6 +25,7 @@ import { DirectoryProvider, useDirectory } from './context/DirectoryContext';
 import { CategoryAdsProvider } from './context/CategoryAdsContext';
 import { DirectoryItem, Offer, NotificationItem } from './types/shatrah';
 import { IRAQ_GOVERNORATES, getGovernorate } from './data/iraqLocations';
+import { CIRCULAR_CATEGORIES } from './components/StoresCircularView';
 import {
   Bell,
   Newspaper,
@@ -43,7 +44,7 @@ export type NavLevel = 'governorates' | 'districts' | 'stores';
 
 function IraqDirectoryApp() {
   const { isManagerUnlocked, balance } = useWallet();
-  const { unreadCount } = useNotification();
+  const { unreadCount, getUnreadCountForCategory } = useNotification();
   const { items } = useDirectory();
   const {
     currentLocation,
@@ -132,9 +133,28 @@ function IraqDirectoryApp() {
     }
   }, [currentLocation.governorateId, currentLocation.districtId, currentLocation.districtName]);
 
-  // Notifications in top header are ONLY shown on the main governorates page (الواجهة الرئيسية للمحافظات)
-  // Inside governorates, districts/regions, or stores, it is removed from the top bar.
-  const showTopBarNotifications = activeTab === 'home' && navLevel === 'governorates';
+  // Top bar notifications are shown across all levels (governorates, districts, and stores)
+  const showTopBarNotifications = activeTab === 'home' || activeTab === 'districts';
+
+  // Find active category object if selected
+  const activeCategoryObj = useMemo(() => {
+    if (!selectedCategoryId) return null;
+    return CIRCULAR_CATEGORIES.find((c) => c.id === selectedCategoryId) || null;
+  }, [selectedCategoryId]);
+
+  // Context-aware unread count for top bar bell badge
+  const currentUnreadCount = useMemo(() => {
+    if (navLevel === 'stores') {
+      if (selectedCategoryId) {
+        return getUnreadCountForCategory(selectedGovernorateId, selectedDistrictId, selectedCategoryId);
+      }
+      return getUnreadCountForCategory(selectedGovernorateId, selectedDistrictId, 'all');
+    }
+    if (navLevel === 'districts') {
+      return getUnreadCountForCategory(selectedGovernorateId, 'all', 'all');
+    }
+    return unreadCount;
+  }, [navLevel, selectedCategoryId, selectedGovernorateId, selectedDistrictId, getUnreadCountForCategory, unreadCount]);
 
   // Dynamic header context based on current page/view:
   // 1. First page (الصفحة الأولى): "دليل العراق 🇮🇶" & "أخبار العراق 🟡"
@@ -504,7 +524,7 @@ function IraqDirectoryApp() {
 
               {/* Right Side: Notifications Bell (only on main governorates page) & Location/Telegram Button */}
               <div className="flex items-center gap-1.5">
-                {/* 1. Notifications Icon with Badge - ONLY in the main governorates page for Iraq-wide ads and manager broadcasts */}
+                {/* 1. Notifications Icon with Badge - in top blue header for all levels (Iraq, Governorate, District, Stores) */}
                 {showTopBarNotifications && (
                   <button
                     type="button"
@@ -515,12 +535,16 @@ function IraqDirectoryApp() {
                       setIsNotificationsOpen(true);
                     }}
                     className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/20 hover:bg-white/30 text-white transition-all cursor-pointer active:scale-95 shadow-2xs"
-                    title="إعلانات العراق وإشعارات الإدارة العامة"
+                    title="الإشعارات والعروض"
                   >
                     <Bell className="h-4.5 w-4.5" />
-                    <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white shadow-xs">
-                      {unreadCount > 0 ? unreadCount : 4}
-                    </span>
+                    {currentUnreadCount > 0 ? (
+                      <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 px-1 items-center justify-center rounded-full bg-rose-500 text-[10px] font-extrabold text-white shadow-xs">
+                        {currentUnreadCount}
+                      </span>
+                    ) : (
+                      <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-amber-400" />
+                    )}
                   </button>
                 )}
 
@@ -764,12 +788,21 @@ function IraqDirectoryApp() {
         onClose={() => setIsWalletModalOpen(false)}
       />
 
-      {/* Notifications Drawer/Modal - Dedicated to all-Iraq announcements, ads, and manager broadcasts */}
+      {/* Notifications Drawer/Modal - Unified for all Iraq, Governorates, Districts, and Categories/Stores */}
       <NotificationsModal
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         onSelectNotification={handleOpenNotificationTarget}
-        initialScope="all"
+        onSelectItem={(item) => setSelectedItem(item)}
+        governorateId={selectedGovernorateId}
+        governorateName={activeGovernorate?.name}
+        districtId={selectedDistrictId}
+        districtName={selectedDistrictName}
+        categoryId={selectedCategoryId}
+        categoryName={activeCategoryObj?.title}
+        categoryIcon={activeCategoryObj?.icon}
+        navLevel={navLevel}
+        initialScope={navLevel === 'governorates' ? 'all' : 'local'}
       />
 
       {/* Regional News Modal */}

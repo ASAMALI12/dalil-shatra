@@ -18,14 +18,11 @@ import {
   Clock,
   Plus,
   ArrowRight,
-  Bell,
 } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
 import { useCategoryAds } from '../context/CategoryAdsContext';
-import { useNotification } from '../context/NotificationContext';
 import { AddCommunityPostModal } from './AddCommunityPostModal';
-import { CategoryNotificationsModal } from './CategoryNotificationsModal';
 import { DistrictEmergencySection } from './DistrictEmergencySection';
 import { StoreCategoryAnimatedAdBanner } from './StoreCategoryAnimatedAdBanner';
 
@@ -324,15 +321,8 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
 }) => {
   const { items } = useDirectory();
   const { getAdsForCategory } = useCategoryAds();
-  const { getUnreadCountForCategory } = useNotification();
   const [searchQuery, setSearchQuery] = useState('');
   const [jobFilter, setJobFilter] = useState<'all' | 'employer' | 'seeker'>('all');
-  const [isCategoryNotificationsOpen, setIsCategoryNotificationsOpen] = useState(false);
-
-  // Unread notifications for all categories in this district/governorate
-  const districtUnreadCount = useMemo(() => {
-    return getUnreadCountForCategory(governorateId, districtId, 'all');
-  }, [getUnreadCountForCategory, governorateId, districtId]);
 
   // Community Modal State for Used Goods, Lost & Found, and Jobs
   const [communityModalType, setCommunityModalType] = useState<'used_goods' | 'lost_found' | 'job' | null>(null);
@@ -348,12 +338,6 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
     if (!activeCategory) return [];
     return getAdsForCategory(governorateId, districtId, activeCategory.id);
   }, [getAdsForCategory, governorateId, districtId, activeCategory]);
-
-  // Retrieve unread notifications count specifically for this category & district
-  const categoryUnreadCount = useMemo(() => {
-    if (!activeCategory) return 0;
-    return getUnreadCountForCategory(governorateId, districtId, activeCategory.id);
-  }, [getUnreadCountForCategory, governorateId, districtId, activeCategory]);
 
   // Check if an item matches a specific category
   const itemMatchesCategory = (item: DirectoryItem, cat: CircularCategory): boolean => {
@@ -577,20 +561,7 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
               أقسام {districtName && districtName !== 'all' ? districtName : governorateName}
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsCategoryNotificationsOpen(true)}
-            className="relative flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-300 text-amber-900 px-2.5 py-1.5 text-xs font-black transition-all cursor-pointer active:scale-95 shadow-2xs"
-            title="الإشعارات والعروض"
-          >
-            <Bell className={`h-4 w-4 text-amber-600 ${districtUnreadCount > 0 ? 'animate-bounce' : ''}`} />
-            <span className="text-xs font-bold">الإشعارات</span>
-            {districtUnreadCount > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-black text-white px-1 shadow-xs animate-pulse">
-                {districtUnreadCount}
-              </span>
-            )}
-          </button>
+          <div className="w-16 sm:w-20" />
         </div>
 
         {/* Categories Card with Extra Enlarged Circular Icons */}
@@ -665,26 +636,8 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
           </h3>
         </div>
 
-        {/* Local Category Notification Bell for this District & Category */}
+        {/* Store count badge */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsCategoryNotificationsOpen(true)}
-            className="relative flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-300 text-amber-900 px-2.5 py-1.5 text-xs font-black transition-all cursor-pointer active:scale-95 shadow-2xs"
-            title={`إشعارات وعروض ${activeCategory.shortTitle} في ${districtName !== 'all' ? districtName : governorateName}`}
-          >
-            <Bell className={`h-4 w-4 text-amber-600 ${categoryUnreadCount > 0 ? 'animate-bounce' : ''}`} />
-            <span className="text-xs font-bold">
-              <span className="xs:hidden">الإشعارات</span>
-              <span className="hidden xs:inline">إشعارات وعروض {activeCategory.shortTitle}</span>
-            </span>
-            {categoryUnreadCount > 0 && (
-              <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-black text-white px-1 shadow-xs animate-pulse">
-                {categoryUnreadCount}
-              </span>
-            )}
-          </button>
-
           <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-xl whitespace-nowrap">
             {filteredStores.length} نشاط
           </span>
@@ -1036,31 +989,6 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
           governorateName={governorateName}
           districtId={districtId}
           districtName={districtName}
-        />
-      )}
-
-      {/* Local Category Notifications Modal - Displays local notifications and offers */}
-      {isCategoryNotificationsOpen && (
-        <CategoryNotificationsModal
-          isOpen={isCategoryNotificationsOpen}
-          onClose={() => setIsCategoryNotificationsOpen(false)}
-          governorateId={governorateId}
-          governorateName={governorateName}
-          districtId={districtId}
-          districtName={districtName !== 'all' ? districtName : governorateName}
-          categoryId={activeCategory ? activeCategory.id : 'all'}
-          categoryName={activeCategory ? activeCategory.title : 'جميع الأقسام'}
-          categoryIcon={activeCategory ? activeCategory.icon : '🔔'}
-          onSelectItem={onSelectItem}
-          onSelectNotification={(notif) => {
-            const targetId = notif.storeId || notif.targetId;
-            if (targetId) {
-              const found = items.find((i) => i.id === targetId || (notif.title && i.name && notif.title.includes(i.name)));
-              if (found) {
-                onSelectItem(found);
-              }
-            }
-          }}
         />
       )}
     </div>
