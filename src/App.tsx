@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { BottomNavBar, NavTab } from './components/BottomNavBar';
 import { IraqGovernoratesGrid } from './components/IraqGovernoratesGrid';
 import { DistrictsCircularView } from './components/DistrictsCircularView';
@@ -219,13 +221,53 @@ function IraqDirectoryApp() {
     }
   }, []);
 
+  // Latest state references to prevent stale closures in event listeners
+  const navLevelRef = useRef(navLevel);
+  const activeTabRef = useRef(activeTab);
+  const selectedCategoryIdRef = useRef(selectedCategoryId);
+  const selectedItemRef = useRef(selectedItem);
+  const isSidebarOpenRef = useRef(isSidebarOpen);
+  const isLocationModalOpenRef = useRef(isLocationModalOpen);
+  const isReportModalOpenRef = useRef(isReportModalOpen);
+  const isEditModalOpenRef = useRef(isEditModalOpen);
+  const isClaimModalOpenRef = useRef(isClaimModalOpen);
+  const isWalletModalOpenRef = useRef(isWalletModalOpen);
+  const isManagerDashboardOpenRef = useRef(isManagerDashboardOpen);
+  const isAdModalOpenRef = useRef(isAdModalOpen);
+  const isOpenStoreModalOpenRef = useRef(isOpenStoreModalOpen);
+  const isNotificationsOpenRef = useRef(isNotificationsOpen);
+  const isNewsOpenRef = useRef(isNewsOpen);
+
+  useEffect(() => {
+    navLevelRef.current = navLevel;
+    activeTabRef.current = activeTab;
+    selectedCategoryIdRef.current = selectedCategoryId;
+    selectedItemRef.current = selectedItem;
+    isSidebarOpenRef.current = isSidebarOpen;
+    isLocationModalOpenRef.current = isLocationModalOpen;
+    isReportModalOpenRef.current = isReportModalOpen;
+    isEditModalOpenRef.current = isEditModalOpen;
+    isClaimModalOpenRef.current = isClaimModalOpen;
+    isWalletModalOpenRef.current = isWalletModalOpen;
+    isManagerDashboardOpenRef.current = isManagerDashboardOpen;
+    isAdModalOpenRef.current = isAdModalOpen;
+    isOpenStoreModalOpenRef.current = isOpenStoreModalOpen;
+    isNotificationsOpenRef.current = isNotificationsOpen;
+    isNewsOpenRef.current = isNewsOpen;
+  });
+
   // When clicking a Governorate from the 3-column grid (Image 1)
   const handleSelectGovernorate = (govId: string) => {
     setSelectedCategoryId(null);
     setSelectedGovernorateId(govId);
     changeLocation(govId, 'all');
     setNavLevel('districts');
-    window.history.pushState({ level: 'districts', govId }, '');
+    try {
+      if (!window.history.state || window.history.state.level === 'governorates') {
+        window.history.replaceState({ level: 'governorates' }, '');
+      }
+      window.history.pushState({ level: 'districts', govId }, '');
+    } catch (e) {}
   };
 
   // When clicking a District from the circular view (Image 2)
@@ -235,74 +277,122 @@ function IraqDirectoryApp() {
     setSelectedDistrictName(distName);
     changeLocation(selectedGovernorateId, distId);
     setNavLevel('stores');
-    window.history.pushState({ level: 'stores', govId: selectedGovernorateId, distId }, '');
+    try {
+      window.history.pushState({ level: 'stores', govId: selectedGovernorateId, distId }, '');
+    } catch (e) {}
   };
 
-  // Back navigation handler
+  // Close all modal popups
+  const closeAllModals = useCallback(() => {
+    setIsSidebarOpen(false);
+    closeLocationModal();
+    setIsReportModalOpen(false);
+    setReportStoreTarget(null);
+    setIsEditModalOpen(false);
+    setEditStoreTarget(null);
+    setIsClaimModalOpen(false);
+    setClaimStoreTarget(null);
+    setIsWalletModalOpen(false);
+    setIsManagerDashboardOpen(false);
+    setIsAdModalOpen(false);
+    setIsOpenStoreModalOpen(false);
+    setIsNotificationsOpen(false);
+    setIsNewsOpen(false);
+  }, [closeLocationModal]);
+
+  // Direct location entry helper (GPS auto-detection, GPS button, or LocationSelectorModal)
+  // Seeds parent governorates and districts into history so Back button always navigates up the hierarchy
+  const navigateToDirectLocation = useCallback(
+    (govId: string, distId: string, distName: string, isAppInit = false) => {
+      setSelectedGovernorateId(govId);
+      setSelectedDistrictId(distId);
+      setSelectedDistrictName(distName);
+      setSelectedCategoryId(null);
+      setSelectedItem(null);
+      setNavLevel('stores');
+      setActiveTab('home');
+
+      try {
+        if (isAppInit || !window.history.state || window.history.state.level === 'governorates') {
+          window.history.replaceState({ level: 'governorates' }, '');
+          window.history.pushState({ level: 'districts', govId }, '');
+          window.history.pushState({ level: 'stores', govId, distId }, '');
+        } else {
+          window.history.pushState({ level: 'districts', govId }, '');
+          window.history.pushState({ level: 'stores', govId, distId }, '');
+        }
+      } catch (e) {
+        console.error('History push error', e);
+      }
+    },
+    []
+  );
+
+  // Back navigation handler (React state)
   const handleGoBack = useCallback(() => {
-    if (isSidebarOpen) {
+    if (isSidebarOpenRef.current) {
       setIsSidebarOpen(false);
       return;
     }
-    if (isLocationModalOpen) {
+    if (isLocationModalOpenRef.current) {
       closeLocationModal();
       return;
     }
-    if (isReportModalOpen) {
+    if (isReportModalOpenRef.current) {
       setIsReportModalOpen(false);
       setReportStoreTarget(null);
       return;
     }
-    if (isEditModalOpen) {
+    if (isEditModalOpenRef.current) {
       setIsEditModalOpen(false);
       setEditStoreTarget(null);
       return;
     }
-    if (isClaimModalOpen) {
+    if (isClaimModalOpenRef.current) {
       setIsClaimModalOpen(false);
       setClaimStoreTarget(null);
       return;
     }
-    if (isWalletModalOpen) {
+    if (isWalletModalOpenRef.current) {
       setIsWalletModalOpen(false);
       return;
     }
-    if (isManagerDashboardOpen) {
+    if (isManagerDashboardOpenRef.current) {
       setIsManagerDashboardOpen(false);
       return;
     }
-    if (isAdModalOpen) {
+    if (isAdModalOpenRef.current) {
       setIsAdModalOpen(false);
       return;
     }
-    if (isOpenStoreModalOpen) {
+    if (isOpenStoreModalOpenRef.current) {
       setIsOpenStoreModalOpen(false);
       return;
     }
-    if (isNotificationsOpen) {
+    if (isNotificationsOpenRef.current) {
       setIsNotificationsOpen(false);
       return;
     }
-    if (isNewsOpen) {
+    if (isNewsOpenRef.current) {
       setIsNewsOpen(false);
       return;
     }
-    if (selectedItem) {
+    if (selectedItemRef.current) {
       setSelectedItem(null);
       return;
     }
 
     // Step hierarchy: inside category -> categories circular view -> districts -> governorates
-    if (activeTab === 'home') {
-      if (navLevel === 'stores') {
-        if (selectedCategoryId) {
+    if (activeTabRef.current === 'home') {
+      if (navLevelRef.current === 'stores') {
+        if (selectedCategoryIdRef.current) {
           setSelectedCategoryId(null);
           return;
         }
         setNavLevel('districts');
         return;
       }
-      if (navLevel === 'districts') {
+      if (navLevelRef.current === 'districts') {
         setNavLevel('governorates');
         return;
       }
@@ -312,40 +402,159 @@ function IraqDirectoryApp() {
       setSelectedCategoryId(null);
       return;
     }
-  }, [
-    isSidebarOpen,
-    isLocationModalOpen,
-    closeLocationModal,
-    isReportModalOpen,
-    isEditModalOpen,
-    isClaimModalOpen,
-    isWalletModalOpen,
-    isManagerDashboardOpen,
-    isAdModalOpen,
-    isOpenStoreModalOpen,
-    isNotificationsOpen,
-    isNewsOpen,
-    selectedItem,
-    activeTab,
-    navLevel,
-    selectedCategoryId,
-  ]);
+  }, [closeLocationModal]);
+
+  // Unified Back navigation trigger for in-app buttons (syncs with browser history)
+  const triggerBack = useCallback(() => {
+    if (
+      window.history.length > 1 &&
+      window.history.state &&
+      window.history.state.level !== 'governorates'
+    ) {
+      window.history.back();
+    } else {
+      handleGoBack();
+    }
+  }, [handleGoBack]);
 
   // Return to All Governorates (Home)
   const handleGoHome = () => {
+    closeAllModals();
+    setSelectedItem(null);
     setSelectedCategoryId(null);
     setNavLevel('governorates');
     setActiveTab('home');
+    try {
+      window.history.pushState({ level: 'governorates' }, '');
+    } catch (e) {}
   };
 
-  // Listen to browser popstate (back button)
+  // Initialize browser history entry on mount if empty
   useEffect(() => {
-    const handlePopState = () => {
+    try {
+      if (!window.history.state) {
+        window.history.replaceState({ level: 'governorates' }, '');
+      }
+    } catch (e) {}
+  }, []);
+
+  // Listen to browser popstate (phone back button or browser back)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+
+      // 1. Close any open modals first
+      if (
+        isSidebarOpenRef.current ||
+        isLocationModalOpenRef.current ||
+        isReportModalOpenRef.current ||
+        isEditModalOpenRef.current ||
+        isClaimModalOpenRef.current ||
+        isWalletModalOpenRef.current ||
+        isManagerDashboardOpenRef.current ||
+        isAdModalOpenRef.current ||
+        isOpenStoreModalOpenRef.current ||
+        isNotificationsOpenRef.current ||
+        isNewsOpenRef.current
+      ) {
+        closeAllModals();
+        return;
+      }
+
+      // 2. Close selected store details if open
+      if (selectedItemRef.current) {
+        setSelectedItem(null);
+        return;
+      }
+
+      // 3. Navigate according to the target history state
+      if (state) {
+        if (state.screen === 'category') {
+          setNavLevel('stores');
+          setActiveTab('home');
+          setSelectedCategoryId(state.catId || null);
+          return;
+        }
+
+        if (state.level === 'stores') {
+          setNavLevel('stores');
+          setActiveTab('home');
+          if (state.govId) setSelectedGovernorateId(state.govId);
+          if (state.distId) setSelectedDistrictId(state.distId);
+          setSelectedCategoryId(null);
+          return;
+        }
+
+        if (state.level === 'districts') {
+          setNavLevel('districts');
+          setActiveTab('home');
+          if (state.govId) setSelectedGovernorateId(state.govId);
+          setSelectedCategoryId(null);
+          return;
+        }
+
+        if (state.level === 'governorates') {
+          setNavLevel('governorates');
+          setActiveTab('home');
+          setSelectedCategoryId(null);
+          return;
+        }
+      }
+
+      // 4. Fallback if state is missing or unformatted
       handleGoBack();
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [handleGoBack]);
+  }, [handleGoBack, closeAllModals]);
+
+  // Native Android hardware back button handler via Capacitor App plugin
+  useEffect(() => {
+    let removeListener: (() => void) | undefined;
+
+    const setupCapacitor = async () => {
+      try {
+        if (Capacitor.isPluginAvailable('App') || Capacitor.isNativePlatform()) {
+          const handler = await CapApp.addListener('backButton', () => {
+            const isAtRoot =
+              !isSidebarOpenRef.current &&
+              !isLocationModalOpenRef.current &&
+              !isReportModalOpenRef.current &&
+              !isEditModalOpenRef.current &&
+              !isClaimModalOpenRef.current &&
+              !isWalletModalOpenRef.current &&
+              !isManagerDashboardOpenRef.current &&
+              !isAdModalOpenRef.current &&
+              !isOpenStoreModalOpenRef.current &&
+              !isNotificationsOpenRef.current &&
+              !isNewsOpenRef.current &&
+              !selectedItemRef.current &&
+              !selectedCategoryIdRef.current &&
+              navLevelRef.current === 'governorates' &&
+              activeTabRef.current === 'home';
+
+            if (isAtRoot) {
+              CapApp.exitApp();
+            } else {
+              triggerBack();
+            }
+          });
+          removeListener = () => {
+            handler.remove();
+          };
+        }
+      } catch (e) {
+        // Not running on Capacitor native platform
+      }
+    };
+
+    setupCapacitor();
+
+    return () => {
+      if (removeListener) removeListener();
+    };
+  }, [triggerBack]);
 
   // Auto-detect GPS on initial app entry and send user directly to their city
   useEffect(() => {
@@ -353,14 +562,10 @@ function IraqDirectoryApp() {
     if (!hasRedirected) {
       sessionStorage.setItem('iraq_app_gps_auto_redirected', 'true');
       detectGPSLocation(false, (loc) => {
-        setSelectedGovernorateId(loc.governorateId);
-        setSelectedDistrictId(loc.districtId);
-        setSelectedDistrictName(loc.districtName);
-        setNavLevel('stores');
-        setActiveTab('home');
+        navigateToDirectLocation(loc.governorateId, loc.districtId, loc.districtName, true);
       });
     }
-  }, [detectGPSLocation]);
+  }, [detectGPSLocation, navigateToDirectLocation]);
 
   // Deep linking: open shared store directly if ?storeId=... is in the URL
   useEffect(() => {
@@ -370,14 +575,23 @@ function IraqDirectoryApp() {
       if (storeId && items.length > 0) {
         const found = items.find((i) => i.id === storeId);
         if (found) {
+          const govId = found.governorateId || IRAQ_GOVERNORATES[0].id;
+          const distId = found.districtId || 'all';
+          const distName = found.districtName || 'الكل';
+
+          try {
+            window.history.replaceState({ level: 'governorates' }, '');
+            window.history.pushState({ level: 'districts', govId }, '');
+            window.history.pushState({ level: 'stores', govId, distId }, '');
+            window.history.pushState({ modal: 'item', id: found.id }, '');
+          } catch (e) {}
+
+          setSelectedGovernorateId(govId);
+          setSelectedDistrictId(distId);
+          setSelectedDistrictName(distName);
           setSelectedItem(found);
-          if (found.governorateId) {
-            setSelectedGovernorateId(found.governorateId);
-            if (found.districtId) {
-              setSelectedDistrictId(found.districtId);
-              setSelectedDistrictName(found.districtName || 'الكل');
-            }
-          }
+          setNavLevel('stores');
+          setActiveTab('home');
         }
       }
     } catch (e) {}
@@ -553,12 +767,7 @@ function IraqDirectoryApp() {
                   type="button"
                   onClick={() => {
                     detectGPSLocation(true, (loc) => {
-                      setSelectedGovernorateId(loc.governorateId);
-                      setSelectedDistrictId(loc.districtId);
-                      setSelectedDistrictName(loc.districtName);
-                      setSelectedCategoryId(null);
-                      setNavLevel('stores');
-                      setActiveTab('home');
+                      navigateToDirectLocation(loc.governorateId, loc.districtId, loc.districtName, false);
                     });
                   }}
                   disabled={isDetectingGPS}
@@ -655,18 +864,27 @@ function IraqDirectoryApp() {
                   onSelectCategory={(catId) => {
                     if (catId) {
                       try {
-                        window.history.pushState({ screen: 'category', catId }, '');
+                        window.history.pushState(
+                          {
+                            screen: 'category',
+                            catId,
+                            govId: selectedGovernorateId,
+                            distId: selectedDistrictId,
+                          },
+                          ''
+                        );
                       } catch (e) {}
+                      setSelectedCategoryId(catId);
+                    } else {
+                      triggerBack();
                     }
-                    setSelectedCategoryId(catId);
                   }}
-                  onBack={() => {
-                    setSelectedCategoryId(null);
-                    setNavLevel('districts');
-                  }}
+                  onBack={triggerBack}
                   onHome={handleGoHome}
                   onSelectItem={(item) => {
-                    window.history.pushState({ modal: 'item', id: item.id }, '');
+                    try {
+                      window.history.pushState({ modal: 'item', id: item.id }, '');
+                    } catch (e) {}
                     setSelectedItem(item);
                   }}
                   onClaimStore={(store) => {
@@ -687,16 +905,10 @@ function IraqDirectoryApp() {
           {activeTab === 'districts' && (
             <DistrictsCircularView
               governorate={activeGovernorate}
-              onBack={() => {
-                setActiveTab('home');
-                setNavLevel('governorates');
-              }}
+              onBack={triggerBack}
               onHome={handleGoHome}
               onSelectDistrict={(distId, distName) => {
-                setSelectedDistrictId(distId);
-                setSelectedDistrictName(distName);
-                setActiveTab('home');
-                setNavLevel('stores');
+                handleSelectDistrict(distId, distName);
               }}
             />
           )}
@@ -743,12 +955,7 @@ function IraqDirectoryApp() {
         onDetectGPS={() => {
           setIsSidebarOpen(false);
           detectGPSLocation(true, (loc) => {
-            setSelectedGovernorateId(loc.governorateId);
-            setSelectedDistrictId(loc.districtId);
-            setSelectedDistrictName(loc.districtName);
-            setSelectedCategoryId(null);
-            setNavLevel('stores');
-            setActiveTab('home');
+            navigateToDirectLocation(loc.governorateId, loc.districtId, loc.districtName, false);
           });
         }}
       />
@@ -758,12 +965,7 @@ function IraqDirectoryApp() {
         isOpen={isLocationModalOpen}
         onClose={closeLocationModal}
         onSelectLocation={(govId, distId, distName) => {
-          setSelectedGovernorateId(govId);
-          setSelectedDistrictId(distId);
-          setSelectedDistrictName(distName);
-          setSelectedCategoryId(null);
-          setNavLevel('stores');
-          setActiveTab('home');
+          navigateToDirectLocation(govId, distId, distName, false);
         }}
       />
 
@@ -832,7 +1034,7 @@ function IraqDirectoryApp() {
       {selectedItem && (
         <ItemDetailsModal
           item={selectedItem}
-          onClose={handleGoBack}
+          onClose={triggerBack}
           onClaimStore={(store) => {
             setClaimStoreTarget(store);
             setIsClaimModalOpen(true);
