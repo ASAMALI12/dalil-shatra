@@ -36,16 +36,8 @@ export async function fetchNewsFromSupabase(): Promise<NewsArticle[]> {
         }));
       }
     }
-
-    const res = await fetch('/api/news');
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success && Array.isArray(json.news)) {
-        return json.news;
-      }
-    }
   } catch (err) {
-    console.warn('Could not fetch news:', err);
+    console.warn('Could not fetch supabase news:', err);
   }
 
   return [];

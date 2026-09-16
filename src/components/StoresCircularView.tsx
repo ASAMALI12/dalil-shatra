@@ -362,18 +362,24 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
 
     // 2. English and Arabic category aliases match
     const categoryAliases: Record<string, string[]> = {
-      supermarket: ['grocery', 'market', 'supermarket', 'food', 'mart', 'بقالة', 'اسواق', 'أسواق', 'غذائية', 'سوبرماركت'],
-      clothing: ['clothing', 'fashion', 'clothes', 'boutique', 'wear', 'dress', 'ملابس', 'أزياء', 'ازياء', 'ألبسة', 'البسة', 'بوتيك'],
-      restaurants: ['restaurant', 'restaurants', 'food', 'dining', 'grill', 'pizza', 'burger', 'مطعم', 'مطاعم', 'وجبات', 'مشاوي'],
-      cafes: ['cafe', 'cafes', 'coffee', 'espresso', 'كافيه', 'كوفي', 'مقهى', 'قهوة'],
+      supermarkets: ['grocery', 'market', 'supermarket', 'food', 'mart', 'بقالة', 'اسواق', 'أسواق', 'غذائية', 'سوبرماركت', 'سوبر ماركت', 'هايبر'],
+      supermarket: ['grocery', 'market', 'supermarket', 'food', 'mart', 'بقالة', 'اسواق', 'أسواق', 'غذائية', 'سوبرماركت', 'سوبر ماركت', 'هايبر'],
+      clothing: ['clothing', 'fashion', 'clothes', 'boutique', 'wear', 'dress', 'ملابس', 'أزياء', 'ازياء', 'ألبسة', 'البسة', 'بوتيك', 'أحذية', 'حقائب'],
+      restaurants: ['restaurant', 'restaurants', 'food', 'dining', 'grill', 'pizza', 'burger', 'مطعم', 'مطاعم', 'وجبات', 'مشاوي', 'شاورما', 'كباب', 'قوزي', 'سمك'],
+      cafes: ['cafe', 'cafes', 'coffee', 'espresso', 'كافيه', 'كوفي', 'مقهى', 'قهوة', 'شاي', 'عصائر', 'حلويات'],
+      medical: ['doctor', 'doctors', 'clinic', 'medical', 'hospital', 'health', 'pharmacy', 'pharmacies', 'طبيب', 'دكتور', 'عيادة', 'صحة', 'مستشفى', 'عيادات', 'صيدلية', 'صيدليات', 'دواء', 'علاج'],
       doctors: ['doctor', 'doctors', 'clinic', 'medical', 'hospital', 'health', 'طبيب', 'دكتور', 'عيادة', 'صحة', 'مستشفى', 'عيادات'],
       pharmacies: ['pharmacy', 'pharmacies', 'medicine', 'drugstore', 'صيدلية', 'صيدليات', 'دواء'],
-      electronics: ['electronics', 'electronic', 'mobile', 'phones', 'tech', 'computer', 'إلكترونيات', 'الكترونيات', 'موبايل', 'هواتف', 'اتصالات'],
-      cars: ['cars', 'car', 'auto', 'automotive', 'سيارات', 'سيارة', 'معرض', 'قطع غيار'],
-      home: ['home', 'furniture', 'decor', 'household', 'أثاث', 'منزلي', 'ديكور'],
-      perfumes: ['perfume', 'perfumes', 'fragrance', 'cosmetics', 'beauty', 'عطور', 'عطر', 'تجميل', 'مكياج'],
-      sweets: ['sweets', 'sweet', 'bakery', 'pastry', 'dessert', 'حلويات', 'كيك', 'معجنات'],
-      services: ['services', 'service', 'maintenance', 'repair', 'خدمات', 'صيانة', 'تصليح'],
+      electronics: ['electronics', 'electronic', 'mobile', 'phones', 'tech', 'computer', 'إلكترونيات', 'الكترونيات', 'موبايل', 'هواتف', 'اتصالات', 'شواحن', 'صيانة'],
+      automotive: ['cars', 'car', 'auto', 'automotive', 'سيارات', 'سيارة', 'معرض', 'قطع غيار', 'زيوت', 'غسيل', 'تبديل زيوت', 'بنشر'],
+      cars: ['cars', 'car', 'auto', 'automotive', 'سيارات', 'سيارة', 'معرض', 'قطع غيار', 'زيوت'],
+      home: ['home', 'furniture', 'decor', 'household', 'أثاث', 'منزلي', 'ديكور', 'مفروشات'],
+      perfumes: ['perfume', 'perfumes', 'fragrance', 'cosmetics', 'beauty', 'عطور', 'عطر', 'تجميل', 'مكياج', 'بخور'],
+      sweets: ['sweets', 'sweet', 'bakery', 'pastry', 'dessert', 'حلويات', 'كيك', 'معجنات', 'بقلاوة'],
+      services: ['services', 'service', 'maintenance', 'repair', 'خدمات', 'صيانة', 'تصليح', 'تبريد', 'كهرباء', 'سبالت', 'تأسيسات'],
+      'used-goods': ['مستعمل', 'مستعملة', 'بالة', 'used', 'used_goods', 'أجهزة مستعملة', 'سيارات مستعملة', 'أثاث مستعمل'],
+      'lost-found': ['مفقود', 'مفقودات', 'موجودات', 'ضائع', 'lost', 'found', 'lost_found'],
+      jobs: ['وظائف', 'وظيفة', 'عمل', 'عمال', 'موظف', 'كاشير', 'مندوب', 'job', 'jobs'],
     };
 
     if (categoryAliases[cat.id]?.some((alias) => itemCat.includes(alias) || itemSub.includes(alias))) {

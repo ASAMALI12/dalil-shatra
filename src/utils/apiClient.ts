@@ -34,11 +34,11 @@ export function getApiBaseUrl(): string {
     const isCapacitor =
       Boolean((window as any).Capacitor?.isNativePlatform?.()) ||
       window.location.protocol === 'capacitor:' ||
-      window.location.hostname === 'localhost' && window.navigator.userAgent.includes('Android');
+      (window.location.hostname === 'localhost' && window.navigator.userAgent.includes('Android'));
 
     if (isCapacitor) {
-      // Default production backend URL for Android APK
-      return 'https://ais-dev-yidmlgs3ngn5lsopjbon53-437409349781.europe-west2.run.app';
+      // In native container, relative paths or empty base allows client services & CapacitorHttp to operate
+      return '';
     }
   }
 

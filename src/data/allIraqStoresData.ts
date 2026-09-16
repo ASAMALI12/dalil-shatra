@@ -1,6 +1,7 @@
 import { DirectoryItem } from '../types/shatrah';
 import { ADDITIONAL_IRAQ_STORES } from './additionalIraqStores';
 import { VERIFIED_IMPORTED_STORES } from './verifiedImportedStores';
+import { COMPREHENSIVE_IRAQ_STORES } from './comprehensiveIraqStores';
 
 const BASE_IRAQ_STORES: DirectoryItem[] = [
   // ==========================================
@@ -981,5 +982,6 @@ export const ALL_IRAQ_STORES: DirectoryItem[] = [
   ...BASE_IRAQ_STORES,
   ...ADDITIONAL_IRAQ_STORES,
   ...VERIFIED_IMPORTED_STORES,
+  ...COMPREHENSIVE_IRAQ_STORES,
 ].filter((store) => Boolean(store.phone && store.phone.trim().length >= 8));
 

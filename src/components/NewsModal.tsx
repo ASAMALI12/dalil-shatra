@@ -15,6 +15,7 @@ import {
 import { CityNews } from '../types/shatrah';
 import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
 import { useLocation } from '../context/LocationContext';
+import { fetchLiveCityNews } from '../services/clientNewsService';
 
 interface NewsModalProps {
   isOpen: boolean;
@@ -83,43 +84,15 @@ export const NewsModal: React.FC<NewsModalProps> = ({
   const fetchNews = useCallback(async (forceRefresh = false) => {
     setIsLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filterMode === 'district' && selectedDistrictName) {
-        if (selectedGovId && selectedGovId !== 'all') {
-          params.append('governorateId', selectedGovId);
-        }
-        params.append('district', selectedDistrictName);
-      } else if (filterMode === 'city' && selectedGovId && selectedGovId !== 'all') {
-        params.append('governorateId', selectedGovId);
-      }
-      if (forceRefresh) {
-        params.append('refresh', 'true');
-      }
+      const items = await fetchLiveCityNews({
+        governorateId: filterMode === 'all' ? undefined : selectedGovId,
+        districtName: filterMode === 'district' ? selectedDistrictName : undefined,
+        filterMode,
+        forceRefresh,
+      });
 
-      const queryStr = params.toString() ? `?${params.toString()}` : '';
-      const res = await fetch(`/api/news${queryStr}`);
-      const json = await res.json();
-
-      if (json.success && Array.isArray(json.news)) {
-        const mapped: CityNews[] = json.news.map((n: any) => ({
-          id: n.id,
-          title: n.title,
-          summary: n.summary || n.content || '',
-          date: n.date || (n.created_at ? new Date(n.created_at).toLocaleDateString('ar-IQ') : 'اليوم'),
-          category: n.category || 'أخبار عامة',
-          source: n.source || 'وكالة الأنباء العراقية (واع)',
-          imageUrl: n.imageUrl || n.image_url || undefined,
-          governorateId: n.governorateId || n.governorate_id || undefined,
-          districtId: n.districtId || n.district_id || undefined,
-          readTime: n.readTime || n.read_time || 'دقيقتان',
-          link: n.link || n.source_url || undefined,
-          isUrgent: Boolean(n.isUrgent),
-        }));
-        setNewsList(mapped);
-        setLastUpdated(new Date().toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' }));
-      } else {
-        setNewsList([]);
-      }
+      setNewsList(items);
+      setLastUpdated(new Date().toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       console.warn('News fetch error:', err);
     } finally {
@@ -156,29 +129,12 @@ export const NewsModal: React.FC<NewsModalProps> = ({
   };
 
   const filteredNews = newsList.filter((news) => {
-    // 1. Governorate / District filter
-    if (filterMode === 'city') {
-      if (news.governorateId && news.governorateId !== selectedGovId) {
-        return false;
-      }
-    } else if (filterMode === 'district' && selectedDistrictName) {
-      const cleanDist = selectedDistrictName.replace(/^(قضاء|ناحية)\s+/, '').trim().toLowerCase();
-      const text = `${news.title} ${news.summary} ${news.districtId || ''}`.toLowerCase();
-      // If news specifically mentions this district or was retrieved for it, prioritize it
-      if (news.districtId && news.districtId.toLowerCase() === cleanDist) {
-        return true;
-      }
-      if (!text.includes(cleanDist) && news.governorateId && news.governorateId !== selectedGovId) {
-        return false;
-      }
-    }
-
-    // 2. Source filter
+    // 1. Source filter
     if (selectedSource !== 'all' && news.source !== selectedSource) {
       return false;
     }
 
-    // 3. Search query filter
+    // 2. Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchTitle = news.title.toLowerCase().includes(q);

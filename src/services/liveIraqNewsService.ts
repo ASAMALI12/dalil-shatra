@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { CityNews } from '../types/directory';
 import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
 
@@ -11,8 +10,13 @@ export interface LiveNewsOptions {
 
 function generateNewsId(title: string, link: string, index: number): string {
   const seed = `${title.trim()}|${link.trim()}|${index}`;
-  const hash = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
-  return `live-news-${hash}`;
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  return `live-news-${Math.abs(hash).toString(36)}`;
 }
 
 // Memory Cache with 15-minute TTL per cache key
