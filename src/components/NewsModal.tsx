@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X,
   Calendar,
@@ -44,7 +44,16 @@ export const NewsModal: React.FC<NewsModalProps> = ({
   const [newsList, setNewsList] = useState<CityNews[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedSource, setSelectedSource] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<string>('الآن');
+
+  const availableSources = useMemo(() => {
+    const set = new Set<string>();
+    newsList.forEach((n) => {
+      if (n.source) set.add(n.source);
+    });
+    return Array.from(set);
+  }, [newsList]);
 
   // Sync state when modal is opened with specific scope props
   useEffect(() => {
@@ -164,7 +173,12 @@ export const NewsModal: React.FC<NewsModalProps> = ({
       }
     }
 
-    // 2. Search query filter
+    // 2. Source filter
+    if (selectedSource !== 'all' && news.source !== selectedSource) {
+      return false;
+    }
+
+    // 3. Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchTitle = news.title.toLowerCase().includes(q);
@@ -297,6 +311,41 @@ export const NewsModal: React.FC<NewsModalProps> = ({
             <span>محدث ({lastUpdated})</span>
           </div>
         </div>
+
+        {/* Trusted Sources Quick Filter */}
+        {availableSources.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto px-3 py-1.5 bg-slate-50 border-b border-slate-200 text-xs no-scrollbar">
+            <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap flex items-center gap-1 pl-1">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <span>المصدر:</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedSource('all')}
+              className={`flex-shrink-0 px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                selectedSource === 'all'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              جميع المصادر
+            </button>
+            {availableSources.map((src) => (
+              <button
+                key={src}
+                type="button"
+                onClick={() => setSelectedSource(src)}
+                className={`flex-shrink-0 px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedSource === src
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {src}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* News Feed Items */}
         <div className="overflow-y-auto p-3 sm:p-4 space-y-3.5 flex-1 min-h-[220px]">

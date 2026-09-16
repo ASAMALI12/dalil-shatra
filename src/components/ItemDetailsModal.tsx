@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  X,
   Phone,
   MessageCircle,
   MapPin,
@@ -30,6 +29,7 @@ import { useDirectory } from '../context/DirectoryContext';
 import { useWallet } from '../context/WalletContext';
 import { VerifiedStoreAdModal } from './VerifiedStoreAdModal';
 import { StoreCategoryAnimatedAdBanner } from './StoreCategoryAnimatedAdBanner';
+import { StoreShareModal } from './StoreShareModal';
 import { normalizeCategoryId, getCategoryDisplayInfo } from '../utils/categoryMatcher';
 
 interface ItemDetailsModalProps {
@@ -56,6 +56,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   if (!item) return null;
 
@@ -79,62 +80,8 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
-  const handleShare = async () => {
-    const currentOrigin = window.location.origin;
-    const currentPath = window.location.pathname;
-    const shareUrl = `${currentOrigin}${currentPath}?storeId=${encodeURIComponent(item.id)}`;
-    const locationInfo = item.governorateName ? `${item.governorateName} - ${item.districtName || ''}` : (item.districtName || 'العراق');
-    
-    const shareData = {
-      title: `${item.name} | دليل العراق`,
-      text: `📍 ${item.name} (${item.subCategory || item.category})\nالموقع: ${locationInfo}\nهاتف: ${item.phone}\nتصفح بيانات المتجر في دليل العراق:`,
-      url: shareUrl,
-    };
-
-    // 1. Try Web Share API first
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-        setStatusMessage('تمت المشاركة بنجاح! 🚀');
-        setTimeout(() => setStatusMessage(null), 3000);
-        return;
-      } catch (err: any) {
-        // User cancelled share dialog or it aborted
-        if (err && err.name === 'AbortError') {
-          return;
-        }
-      }
-    }
-
-    // 2. Clipboard fallback (if Web Share API not available or failed)
-    try {
-      const copyText = `${shareData.title}\n${shareData.text}\n${shareUrl}`;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(copyText);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = copyText;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-      setIsCopied(true);
-      setStatusMessage('تم نسخ رابط وتفاصيل المتجر بنجاح لمشاركتها 📋');
-      setTimeout(() => {
-        setIsCopied(false);
-        setStatusMessage(null);
-      }, 3500);
-    } catch (err) {
-      setIsCopied(true);
-      setStatusMessage('تم نسخ الرابط!');
-      setTimeout(() => {
-        setIsCopied(false);
-        setStatusMessage(null);
-      }, 3000);
-    }
+  const handleShare = () => {
+    setIsShareModalOpen(true);
   };
 
   const handleDelete = () => {
@@ -144,48 +91,14 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       <div 
         className="relative w-full max-w-lg sm:max-w-xl overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] sm:max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Dedicated Top Navigation Bar */}
-        <div className="flex items-center justify-between border-b border-slate-200/80 bg-white px-3 sm:px-4 py-2.5 z-10">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center gap-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 px-3 py-1.5 text-xs font-black transition-all cursor-pointer active:scale-95 border border-slate-200"
-          >
-            <ArrowRight className="h-4 w-4" />
-            <span>رجوع للخلف</span>
-          </button>
-
-          <div className="truncate px-2 text-center">
-            <h3 className="font-display text-xs sm:text-sm font-extrabold text-slate-900 truncate max-w-[180px] sm:max-w-[240px]">
-              {item.name}
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handleShare}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-              title="مشاركة"
-            >
-              <Share2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-              title="إغلاق"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
         {/* Compact Store Header with Small Image (صورة صغيرة وموجزة دون أخذ الشاشة) */}
         <div className="border-b border-slate-200/90 bg-slate-50/80 p-3 sm:p-3.5 flex items-center gap-3 shrink-0">
           {/* Small Store Image Thumbnail */}
@@ -681,6 +594,15 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
           isOpen={isAdBookingOpen}
           onClose={() => setIsAdBookingOpen(false)}
           initialScope="store_area"
+        />
+      )}
+
+      {/* Store Share Modal */}
+      {isShareModalOpen && (
+        <StoreShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          item={item}
         />
       )}
     </div>

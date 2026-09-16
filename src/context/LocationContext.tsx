@@ -180,8 +180,8 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setIsLocationModalOpen(false);
   };
 
-  const openLocationModal = () => setIsLocationModalOpen(true);
-  const closeLocationModal = () => setIsLocationModalOpen(false);
+  const openLocationModal = useCallback(() => setIsLocationModalOpen(true), []);
+  const closeLocationModal = useCallback(() => setIsLocationModalOpen(false), []);
   const clearGpsStatusMessage = useCallback(() => setGpsStatusMessage(null), []);
 
   const setDistrict = useCallback((districtId: string, _districtName?: string) => {

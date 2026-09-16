@@ -88,7 +88,7 @@ function IraqDirectoryApp() {
   const [isNewsOpen, setIsNewsOpen] = useState(false);
   const [isManagerDashboardOpen, setIsManagerDashboardOpen] = useState(false);
 
-  // Hidden 5-click trigger for manager login on the "دليل العراق" title
+  // Hidden 25-click trigger for manager login on the "دليل العراق" title
   const managerTapTimerRef = useRef<any>(null);
   const [managerTapCount, setManagerTapCount] = useState(0);
 
@@ -100,14 +100,14 @@ function IraqDirectoryApp() {
     }
 
     const nextCount = managerTapCount + 1;
-    if (nextCount >= 5) {
+    if (nextCount >= 25) {
       setManagerTapCount(0);
       setIsManagerDashboardOpen(true);
     } else {
       setManagerTapCount(nextCount);
       managerTapTimerRef.current = setTimeout(() => {
         setManagerTapCount(0);
-      }, 2500);
+      }, 3500);
     }
   };
 
@@ -328,6 +328,14 @@ function IraqDirectoryApp() {
     []
   );
 
+  // Unified store opening bridge (keeps browser and hardware back button in sync)
+  const handleOpenStore = useCallback((item: DirectoryItem) => {
+    try {
+      window.history.pushState({ modal: 'item', id: item.id }, '');
+    } catch (e) {}
+    setSelectedItem(item);
+  }, []);
+
   // Back navigation handler (React state)
   const handleGoBack = useCallback(() => {
     if (isSidebarOpenRef.current) {
@@ -404,18 +412,65 @@ function IraqDirectoryApp() {
     }
   }, [closeLocationModal]);
 
-  // Unified Back navigation trigger for in-app buttons (syncs with browser history)
+  // Unified Back navigation trigger for in-app buttons & hardware buttons
   const triggerBack = useCallback(() => {
+    // 1. Close open modals first
     if (
-      window.history.length > 1 &&
-      window.history.state &&
-      window.history.state.level !== 'governorates'
+      isSidebarOpenRef.current ||
+      isLocationModalOpenRef.current ||
+      isReportModalOpenRef.current ||
+      isEditModalOpenRef.current ||
+      isClaimModalOpenRef.current ||
+      isWalletModalOpenRef.current ||
+      isManagerDashboardOpenRef.current ||
+      isAdModalOpenRef.current ||
+      isOpenStoreModalOpenRef.current ||
+      isNotificationsOpenRef.current ||
+      isNewsOpenRef.current
     ) {
-      window.history.back();
-    } else {
-      handleGoBack();
+      closeAllModals();
+      return;
     }
-  }, [handleGoBack]);
+
+    // 2. Close store details if open
+    if (selectedItemRef.current) {
+      setSelectedItem(null);
+      return;
+    }
+
+    // 3. Close category if open
+    if (selectedCategoryIdRef.current) {
+      setSelectedCategoryId(null);
+      return;
+    }
+
+    // 4. Return from stores to districts
+    if (navLevelRef.current === 'stores') {
+      setNavLevel('districts');
+      return;
+    }
+
+    // 5. Return from districts to governorates
+    if (navLevelRef.current === 'districts') {
+      setNavLevel('governorates');
+      return;
+    }
+
+    // 6. Return from other tabs to home
+    if (activeTabRef.current !== 'home') {
+      setActiveTab('home');
+      setNavLevel('governorates');
+      return;
+    }
+
+    handleGoBack();
+  }, [closeAllModals, handleGoBack]);
+
+  const handleGoBackRef = useRef(handleGoBack);
+  handleGoBackRef.current = handleGoBack;
+
+  const triggerBackRef = useRef(triggerBack);
+  triggerBackRef.current = triggerBack;
 
   // Return to All Governorates (Home)
   const handleGoHome = () => {
@@ -501,13 +556,29 @@ function IraqDirectoryApp() {
         }
       }
 
-      // 4. Fallback if state is missing or unformatted
-      handleGoBack();
+      // 4. Reliable fallback hierarchy step
+      if (selectedCategoryIdRef.current) {
+        setSelectedCategoryId(null);
+        return;
+      }
+      if (navLevelRef.current === 'stores') {
+        setNavLevel('districts');
+        return;
+      }
+      if (navLevelRef.current === 'districts') {
+        setNavLevel('governorates');
+        return;
+      }
+      if (activeTabRef.current !== 'home') {
+        setActiveTab('home');
+        setNavLevel('governorates');
+        return;
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [handleGoBack, closeAllModals]);
+  }, [closeAllModals]);
 
   // Native Android hardware back button handler via Capacitor App plugin
   useEffect(() => {
@@ -537,7 +608,7 @@ function IraqDirectoryApp() {
             if (isAtRoot) {
               CapApp.exitApp();
             } else {
-              triggerBack();
+              triggerBackRef.current();
             }
           });
           removeListener = () => {
@@ -554,7 +625,7 @@ function IraqDirectoryApp() {
     return () => {
       if (removeListener) removeListener();
     };
-  }, [triggerBack]);
+  }, []);
 
   // Auto-detect GPS on initial app entry and send user directly to their city
   useEffect(() => {
@@ -580,7 +651,8 @@ function IraqDirectoryApp() {
           const distName = found.districtName || 'الكل';
 
           try {
-            window.history.replaceState({ level: 'governorates' }, '');
+            const cleanUrl = window.location.pathname;
+            window.history.replaceState({ level: 'governorates' }, '', cleanUrl);
             window.history.pushState({ level: 'districts', govId }, '');
             window.history.pushState({ level: 'stores', govId, distId }, '');
             window.history.pushState({ modal: 'item', id: found.id }, '');
@@ -618,9 +690,9 @@ function IraqDirectoryApp() {
   const handleSelectOffer = (offer: Offer) => {
     const matchingStore = items.find((i) => i.name === offer.businessName);
     if (matchingStore) {
-      setSelectedItem(matchingStore);
+      handleOpenStore(matchingStore);
     } else {
-      setSelectedItem({
+      handleOpenStore({
         id: `offer-${offer.id}`,
         name: offer.businessName,
         category: offer.category || 'عروض وتخفيضات',
@@ -648,7 +720,7 @@ function IraqDirectoryApp() {
         (i) => i.id === targetId || (notif.title && i.name && notif.title.includes(i.name))
       );
       if (found) {
-        setSelectedItem(found);
+        handleOpenStore(found);
         return;
       }
     }
@@ -660,7 +732,7 @@ function IraqDirectoryApp() {
       notif.targetType === 'offer' ||
       notif.imageUrl
     ) {
-      setSelectedItem({
+      handleOpenStore({
         id: notif.storeId || notif.targetId || notif.id,
         name: notif.title
           .replace(/^[🔥🎉🍕🐟📍⭐📢🍽️🏨🛍️🍲☕🥩📱\s]+/, '')
@@ -697,7 +769,7 @@ function IraqDirectoryApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 pb-20 selection:bg-sky-100">
+    <div className="min-h-screen bg-slate-100/70 text-slate-900 pb-6 selection:bg-sky-100">
       {/* Real-time automatic broadcast alert banner */}
       <NotificationToastBanner onOpenTarget={handleOpenNotificationTarget} />
 
@@ -724,7 +796,7 @@ function IraqDirectoryApp() {
                 <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0"></span>
               </button>
 
-              {/* Center: Title "دليل العراق" / "دليل المحافظة" / "دليل القضاء" (5 clicks triggers manager login) */}
+              {/* Center: Title "دليل العراق" / "دليل المحافظة" / "دليل القضاء" (25 clicks triggers manager login) */}
               <div
                 onClick={handleTitleClick}
                 className="flex items-center gap-1.5 select-none cursor-pointer active:scale-95 transition-transform max-w-[150px] sm:max-w-[200px]"
@@ -881,12 +953,7 @@ function IraqDirectoryApp() {
                   }}
                   onBack={triggerBack}
                   onHome={handleGoHome}
-                  onSelectItem={(item) => {
-                    try {
-                      window.history.pushState({ modal: 'item', id: item.id }, '');
-                    } catch (e) {}
-                    setSelectedItem(item);
-                  }}
+                  onSelectItem={handleOpenStore}
                   onClaimStore={(store) => {
                     window.history.pushState({ modal: 'claim' }, '');
                     setClaimStoreTarget(store);
@@ -933,15 +1000,6 @@ function IraqDirectoryApp() {
             </div>
           )}
         </main>
-
-        {/* Bottom Navigation Bar with mini icons matching Screenshot 1 */}
-        <BottomNavBar
-          activeTab={activeTab}
-          setActiveTab={handleSelectTab}
-          onOpenAdModal={() => setIsAdModalOpen(true)}
-          onOpenSidebar={() => setIsSidebarOpen(true)}
-          onOpenWalletModal={() => setIsWalletModalOpen(true)}
-        />
       </div>
 
       {/* Sidebar Drawer Component */}
@@ -980,7 +1038,7 @@ function IraqDirectoryApp() {
         isOpen={isOpenStoreModalOpen}
         onClose={() => setIsOpenStoreModalOpen(false)}
         onStoreCreated={(store) => {
-          setSelectedItem(store);
+          handleOpenStore(store);
         }}
       />
 
@@ -995,7 +1053,7 @@ function IraqDirectoryApp() {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
         onSelectNotification={handleOpenNotificationTarget}
-        onSelectItem={(item) => setSelectedItem(item)}
+        onSelectItem={handleOpenStore}
         governorateId={selectedGovernorateId}
         governorateName={activeGovernorate?.name}
         districtId={selectedDistrictId}
@@ -1022,7 +1080,7 @@ function IraqDirectoryApp() {
         onClose={() => setIsManagerDashboardOpen(false)}
         onPreviewStore={(store) => {
           setIsManagerDashboardOpen(false);
-          setSelectedItem(store);
+          handleOpenStore(store);
         }}
         onOpenWalletModal={() => {
           setIsManagerDashboardOpen(false);
@@ -1069,7 +1127,7 @@ function IraqDirectoryApp() {
           setClaimStoreTarget(null);
         }}
         onClaimSuccess={(claimedStore) => {
-          setSelectedItem(claimedStore);
+          handleOpenStore(claimedStore);
         }}
       />
 
@@ -1083,7 +1141,7 @@ function IraqDirectoryApp() {
             setEditStoreTarget(null);
           }}
           onUpdated={(updatedStore) => {
-            setSelectedItem(updatedStore);
+            handleOpenStore(updatedStore);
           }}
         />
       )}

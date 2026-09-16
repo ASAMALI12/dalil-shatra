@@ -70,15 +70,26 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const saved = localStorage.getItem('iraq_manager_credentials');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // If it was the legacy default phone/username, migrate to the user's new credentials
+        if (parsed.phone === '07801234567' || parsed.username === 'admin') {
+          const updated = {
+            phone: '07801459424',
+            username: 'asamali',
+            password: 'AsamasaM12',
+          };
+          localStorage.setItem('iraq_manager_credentials', JSON.stringify(updated));
+          return updated;
+        }
+        return parsed;
       } catch (e) {
         // fallback
       }
     }
     return {
-      phone: '07801234567',
-      username: 'admin',
-      password: 'IraqDirectory2026!Secure',
+      phone: '07801459424',
+      username: 'asamali',
+      password: 'AsamasaM12',
     };
   });
 
