@@ -517,7 +517,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
                   مبروك! أصبحت المالك المعتمد لمتجر "{claimedStoreResult.name}" 👑
                 </h4>
                 <p className="text-xs text-slate-600 max-w-xs mx-auto mt-1">
-                  تم توثيق وتأكيد رقم الهاتف بنجاح باسم <strong>({ownerName})</strong>. يمكنك الآن تعديل بيانات المتجر، إضافة عروض حصرية، ونشر التحديثات.
+                  تم توثيق وتأكيد رقم الهاتف بنجاح باسم <strong>({ownerName})</strong>. بصفتك المالك، يمكنك الآن إضافة وتحديث صور المتجر وتعيين الغلاف، أو تغيير كافة معلومات وبيانات المتجر.
                 </p>
               </div>
 
@@ -553,16 +553,21 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
                     className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-600 py-3 font-display text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition-all cursor-pointer"
                   >
                     <Edit3 className="h-4 w-4" />
-                    <span>تعديل بيانات المتجر الآن ✏️</span>
+                    <span>تعديل معلومات المتجر والغلاف ✏️</span>
                   </button>
                 )}
 
                 <button
                   type="button"
-                  onClick={handleClose}
+                  onClick={() => {
+                    handleClose();
+                    if (onClaimSuccess) {
+                      onClaimSuccess(claimedStoreResult);
+                    }
+                  }}
                   className="rounded-2xl bg-slate-900 py-3 font-display text-xs font-bold text-white hover:bg-slate-800 transition-all cursor-pointer"
                 >
-                  إغلاق وتصفح المتجر
+                  فتح المتجر وإدارة الصور 📸
                 </button>
               </div>
             </div>

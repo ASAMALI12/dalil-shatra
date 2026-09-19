@@ -10,10 +10,12 @@ import {
   Filter,
   CheckCircle2,
   Sparkles,
+  ChevronLeft,
 } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
 import { useLocation } from '../context/LocationContext';
+import { openSocialMediaLink } from '../utils/socialLinks';
 
 interface RegionalStoresSectionProps {
   onSelectItem: (item: DirectoryItem) => void;
@@ -151,119 +153,38 @@ export const RegionalStoresSection: React.FC<RegionalStoresSectionProps> = ({
         </button>
       </div>
 
-      {/* Stores Grid / Cards */}
+      {/* Stores Grid / Cards - Clean, enlarged image & clear name */}
       <div className="space-y-3">
         {localStores.length > 0 ? (
           localStores.map((item) => {
-            const isOwner = isUserStoreOwner(item.id);
             return (
               <div
                 key={item.id}
-                className="group relative rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-xs hover:border-emerald-300 hover:shadow-md transition-all duration-200"
+                onClick={() => onSelectItem(item)}
+                className="group relative flex items-center gap-4 rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
               >
-                <div className="flex gap-3">
-                  {/* Store Image */}
-                  <div
-                    onClick={() => onSelectItem(item)}
-                    className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-2xl overflow-hidden flex-shrink-0 cursor-pointer bg-slate-100"
-                  >
-                    <img
-                      src={item.imageUrl}
-                      alt={item.name}
-                      referrerPolicy="no-referrer"
-                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute top-1 right-1">
-                      {item.isOpen ? (
-                        <span className="flex h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white" />
-                      ) : (
-                        <span className="flex h-2 w-2 rounded-full bg-slate-400 ring-2 ring-white" />
-                      )}
-                    </div>
-                  </div>
+                {/* Enlarged Store / Restaurant Image */}
+                <div className="relative h-24 w-24 sm:h-28 sm:w-28 rounded-2xl overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs">
+                  <img
+                    src={item.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                    alt={item.name}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                </div>
 
-                  {/* Store Details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-1">
-                      <div className="min-w-0">
-                        <h4
-                          onClick={() => onSelectItem(item)}
-                          className="font-display text-sm font-bold text-slate-900 truncate hover:text-emerald-700 cursor-pointer"
-                        >
-                          {item.name}
-                        </h4>
-                        <div className="flex items-center gap-1 text-[11px] text-slate-500 truncate">
-                          <span>{item.subCategory || item.category}</span>
-                        </div>
-                      </div>
+                {/* Restaurant / Store Name - Prominent & Beautiful */}
+                <div className="flex-1 min-w-0 pr-1">
+                  <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors leading-snug line-clamp-2">
+                    {item.name}
+                  </h4>
+                </div>
 
-                      {/* Rating */}
-                      <div className="flex items-center gap-0.5 rounded-lg bg-amber-50 px-1.5 py-0.5 text-xs font-bold text-amber-800 border border-amber-200/60 flex-shrink-0">
-                        <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                        <span>{item.rating}</span>
-                      </div>
-                    </div>
-
-                    {/* Address & District Tag */}
-                    <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-1 truncate">
-                      <MapPin className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-                      <span className="truncate">{item.address}</span>
-                      {item.districtName && (
-                        <span className="rounded-md bg-slate-100 px-1.5 py-0.2 text-[9px] font-bold text-slate-600 flex-shrink-0">
-                          {item.districtName}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Action Bar (Direct Contact buttons) */}
-                    <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-slate-100 flex-wrap">
-                      {/* Call Direct */}
-                      <a
-                        href={`tel:${item.phone}`}
-                        className="flex items-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 px-2.5 py-1 text-xs font-bold transition-all shadow-2xs"
-                        title="اتصال مباشر"
-                      >
-                        <Phone className="h-3 w-3 text-emerald-600" />
-                        <span>اتصال</span>
-                      </a>
-
-                      {/* WhatsApp Direct */}
-                      <a
-                        href={`https://wa.me/${item.whatsapp}?text=${encodeURIComponent(`مرحباً، شاهدت متجركم ${item.name} في دليل العراق الذكي.`)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 text-xs font-bold transition-all shadow-2xs"
-                        title="مراسلة واتساب"
-                      >
-                        <MessageCircle className="h-3 w-3 text-emerald-600" />
-                        <span>واتساب</span>
-                      </a>
-
-                      {/* View Details */}
-                      <button
-                        type="button"
-                        onClick={() => onSelectItem(item)}
-                        className="flex items-center gap-1 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-2.5 py-1 text-xs font-bold transition-all shadow-2xs cursor-pointer mr-auto"
-                      >
-                        <span>التفاصيل</span>
-                      </button>
-
-                      {/* Store Ownership Status or Claim Button */}
-                      {isOwner ? (
-                        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                          <Crown className="h-3 w-3 text-amber-500" />
-                          <span>متجرك الموثق</span>
-                        </span>
-                      ) : !item.isClaimed ? (
-                        <button
-                          type="button"
-                          onClick={() => onClaimStore(item)}
-                          className="text-[10px] font-bold text-amber-800 hover:text-amber-900 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-lg transition-all cursor-pointer"
-                        >
-                          وثّق هذا المتجر 👑
-                        </button>
-                      ) : null}
-                    </div>
+                {/* Left Arrow Icon indicating click to open store profile */}
+                <div className="shrink-0 pl-1">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-emerald-50 text-slate-400 group-hover:text-emerald-600 transition-all shadow-2xs">
+                    <ChevronLeft className="h-5 w-5" />
                   </div>
                 </div>
               </div>

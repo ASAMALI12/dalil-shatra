@@ -17,8 +17,6 @@ import {
   RefreshCw,
   ExternalLink,
   Info,
-  Instagram,
-  Facebook,
   Globe,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -65,52 +63,9 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
   const [address, setAddress] = useState('');
   const [workingHours, setWorkingHours] = useState('9:00 ص - 11:00 م');
   const [description, setDescription] = useState('');
-  const [socialImportInput, setSocialImportInput] = useState('');
-  const [socialImportSuccess, setSocialImportSuccess] = useState('');
-  const [instagram, setInstagram] = useState('');
-  const [facebook, setFacebook] = useState('');
-  const [tiktok, setTiktok] = useState('');
   const [selectedImage, setSelectedImage] = useState(
     'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'
   );
-
-  const handleAutoImportSocial = () => {
-    if (!socialImportInput.trim()) return;
-    const val = socialImportInput.trim();
-    let detectedPlatform = '';
-
-    if (val.includes('instagram.com') || val.startsWith('@')) {
-      detectedPlatform = 'إنستغرام';
-      const cleanHandle = val.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '').replace('@', '');
-      setInstagram(cleanHandle);
-      if (!storeName) {
-        setStoreName(cleanHandle.replace(/[._]/g, ' '));
-      }
-    } else if (val.includes('facebook.com') || val.includes('fb.com')) {
-      detectedPlatform = 'فيسبوك';
-      const cleanPage = val.replace(/^https?:\/\/(www\.)?(facebook|fb)\.com\//, '').replace(/\/$/, '');
-      setFacebook(cleanPage);
-      if (!storeName) {
-        setStoreName(cleanPage.replace(/[._-]/g, ' '));
-      }
-    } else if (val.includes('tiktok.com')) {
-      detectedPlatform = 'تيك توك';
-      const cleanHandle = val.replace(/^https?:\/\/(www\.)?tiktok\.com\/@?/, '').replace(/\/$/, '');
-      setTiktok(cleanHandle);
-      if (!storeName) {
-        setStoreName(cleanHandle.replace(/[._]/g, ' '));
-      }
-    } else {
-      detectedPlatform = 'حساب التواصل';
-      setInstagram(val.replace('@', ''));
-      if (!storeName) {
-        setStoreName(val.replace('@', '').replace(/[._]/g, ' '));
-      }
-    }
-
-    setSocialImportSuccess(`تم استيراد صفحة ${detectedPlatform} بنجاح! 🎉`);
-    setTimeout(() => setSocialImportSuccess(''), 4000);
-  };
 
   // When governorateId changes, update district to first of that governorate
   const currentGovObj = IRAQ_GOVERNORATES.find((g) => g.id === governorateId) || IRAQ_GOVERNORATES[0];
@@ -241,10 +196,8 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
       isOpen: true,
       workingHours: workingHours.trim() || '9:00 ص - 10:00 م',
       imageUrl: selectedImage,
+      images: [selectedImage],
       description: description.trim() || `متجر موثق لصاحبه ${ownerName}، مسجل رسمياً في دليل العراق.`,
-      instagram: instagram.trim() || undefined,
-      facebook: facebook.trim() || undefined,
-      tiktok: tiktok.trim() || undefined,
       tags: ['متجر جديد', 'موثق واتساب', ownerName, storeName, gov?.name || '', dist?.name || ''],
       isClaimed: true,
       claimStatus: 'verified',
@@ -342,47 +295,6 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
           {/* STEP 1: STORE & OWNER INFORMATION */}
           {step === 'info' && (
             <form onSubmit={handleProceedToVerification} className="space-y-4">
-              
-              {/* Quick Auto-Import from Social Media */}
-              <div className="rounded-2xl bg-gradient-to-r from-sky-50 via-indigo-50/60 to-purple-50 p-3.5 border border-sky-200/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-xs font-bold text-sky-900 flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-sky-600" />
-                    استيراد بيانات المتجر من صفحات التواصل الاجتماعي:
-                  </span>
-                  <span className="text-[10px] bg-sky-200/70 text-sky-800 font-bold px-2 py-0.5 rounded-full">
-                    ميزة ذكية ⚡
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1 flex items-center">
-                    <Globe className="absolute right-3 h-4 w-4 text-slate-400 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={socialImportInput}
-                      onChange={(e) => setSocialImportInput(e.target.value)}
-                      placeholder="ألصق رابط صفحة إنستغرام أو فيسبوك أو تيك توك..."
-                      className="w-full rounded-xl border border-sky-200 bg-white py-2 pr-9 pl-3 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:outline-none"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleAutoImportSocial}
-                    className="rounded-xl bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 whitespace-nowrap"
-                  >
-                    استيراد
-                  </button>
-                </div>
-                {socialImportSuccess && (
-                  <p className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 animate-in fade-in">
-                    {socialImportSuccess}
-                  </p>
-                )}
-                <p className="text-[10px] text-slate-500">
-                  يمكنك لصق رابط الصفحة (مثل instagram.com/name أو facebook.com/page) لجلب الاسم والحساب تلقائياً.
-                </p>
-              </div>
-
               {/* Notice Card */}
               <div className="rounded-2xl bg-amber-50/80 border border-amber-200/90 p-3 flex items-start gap-2.5 text-xs text-amber-900">
                 <Info className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -550,45 +462,6 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
                       onChange={(e) => setWorkingHours(e.target.value)}
                       placeholder="8:00 ص - 10:00 م"
                       className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pr-9 pl-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Social Media Accounts (Optional) */}
-              <div className="space-y-2 rounded-2xl bg-slate-50 p-3 border border-slate-200/80">
-                <label className="block font-display text-xs font-bold text-slate-700">
-                  حسابات وصفحات التواصل الاجتماعي (اختياري) 📱
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  <div className="relative flex items-center">
-                    <Instagram className="absolute right-3 h-4 w-4 text-pink-500 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={instagram}
-                      onChange={(e) => setInstagram(e.target.value)}
-                      placeholder="يوزر إنستغرام"
-                      className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-9 pl-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="relative flex items-center">
-                    <Facebook className="absolute right-3 h-4 w-4 text-blue-600 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={facebook}
-                      onChange={(e) => setFacebook(e.target.value)}
-                      placeholder="رابط أو صفحة فيسبوك"
-                      className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-9 pl-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
-                    />
-                  </div>
-                  <div className="relative flex items-center">
-                    <span className="absolute right-3 text-xs pointer-events-none">🎵</span>
-                    <input
-                      type="text"
-                      value={tiktok}
-                      onChange={(e) => setTiktok(e.target.value)}
-                      placeholder="حساب تيك توك"
-                      className="w-full rounded-xl border border-slate-200 bg-white py-2 pr-9 pl-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
                     />
                   </div>
                 </div>

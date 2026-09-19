@@ -1129,6 +1129,10 @@ function IraqDirectoryApp() {
         onClaimSuccess={(claimedStore) => {
           handleOpenStore(claimedStore);
         }}
+        onOpenEdit={(store) => {
+          setEditStoreTarget(store);
+          setIsEditModalOpen(true);
+        }}
       />
 
       {/* Edit Store Modal */}

@@ -15,6 +15,7 @@ export interface DirectoryItem {
   isOpen: boolean;
   workingHours: string;
   imageUrl: string;
+  images?: string[];
   description: string;
   featured?: boolean;
   tags: string[];

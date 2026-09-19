@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { X, Search, Star, Phone, MapPin, Filter, ArrowRight, Trash2, Globe } from 'lucide-react';
+import { X, Search, ChevronLeft, ArrowRight, MapPin, Globe } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
-import { useWallet } from '../context/WalletContext';
 import { useLocation } from '../context/LocationContext';
 
 interface CategoryListModalProps {
@@ -18,13 +17,11 @@ export const CategoryListModal: React.FC<CategoryListModalProps> = ({
   onClose,
   onSelectItem,
 }) => {
-  const { items, deleteStore } = useDirectory();
-  const { isManagerUnlocked } = useWallet();
+  const { items } = useDirectory();
   const { currentLocation } = useLocation();
   const [search, setSearch] = useState('');
   const [filterOpenOnly, setFilterOpenOnly] = useState(false);
   const [locationScope, setLocationScope] = useState<'local' | 'all'>('local');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filteredItems = useMemo(() => {
     if (!categoryId) return [];
@@ -166,97 +163,39 @@ export const CategoryListModal: React.FC<CategoryListModalProps> = ({
           </div>
         </div>
 
-        {/* Items List */}
+        {/* Items List - Clean, enlarged image & clear name */}
         <div className="overflow-y-auto p-4 space-y-3 flex-1">
           {filteredItems.length > 0 ? (
             filteredItems.map((item) => (
               <div
                 key={item.id}
                 onClick={() => onSelectItem(item)}
-                className="group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-xs hover:border-red-300 hover:shadow-md transition-all cursor-pointer"
+                className="group relative flex items-center gap-4 rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
               >
-                <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
-                  <div className="relative h-20 w-24 sm:h-20 sm:w-24 flex-shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                    <img
-                      src={item.imageUrl}
-                      alt={item.name}
-                      referrerPolicy="no-referrer"
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                    {item.isOpen ? (
-                      <span className="absolute top-1 right-1 rounded-md bg-emerald-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                        مفتوح
-                      </span>
-                    ) : (
-                      <span className="absolute top-1 right-1 rounded-md bg-slate-700/80 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                        مغلق
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600">
-                        {item.subCategory || item.districtName || 'دليل العراق'}
-                      </span>
-                      <div className="flex items-center gap-1 text-[11px] font-bold text-amber-500">
-                        <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                        <span>{item.rating}</span>
-                      </div>
-                    </div>
-
-                    <h4 className="mt-1 font-display text-sm sm:text-base font-bold text-slate-900 truncate">
-                      {item.name}
-                    </h4>
-
-                    <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 truncate">
-                      <span className="flex items-center gap-1 truncate">
-                        <MapPin className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                        {item.address}
-                      </span>
-                    </div>
-                  </div>
+                {/* Enlarged Store / Restaurant Image */}
+                <div className="relative h-24 w-24 sm:h-28 sm:w-28 rounded-2xl overflow-hidden flex-shrink-0 bg-slate-100 border border-slate-200/90 shadow-2xs">
+                  <img
+                    src={item.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                    alt={item.name}
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
+                    loading="lazy"
+                  />
                 </div>
 
-                {/* Manager Delete Button (If Manager Mode is Active) */}
-                {isManagerUnlocked && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 w-full sm:w-auto justify-end"
-                  >
-                    {deletingId === item.id ? (
-                      <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 p-1.5 rounded-xl">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            deleteStore(item.id);
-                            setDeletingId(null);
-                          }}
-                          className="bg-rose-600 text-white text-[11px] font-bold px-2 py-1 rounded-lg hover:bg-rose-700"
-                        >
-                          تأكيد الحذف
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingId(null)}
-                          className="text-slate-500 text-[11px] px-1.5 py-1"
-                        >
-                          إلغاء
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(item.id)}
-                        className="flex items-center gap-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 text-xs font-bold transition-all border border-rose-200 cursor-pointer"
-                        title="حذف المتجر كمدير"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span>حذف</span>
-                      </button>
-                    )}
+                {/* Restaurant / Store Name - Prominent & Beautiful */}
+                <div className="flex-1 min-w-0 pr-1">
+                  <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-red-600 transition-colors leading-snug line-clamp-2">
+                    {item.name}
+                  </h4>
+                </div>
+
+                {/* Left Arrow Icon indicating click to open store profile */}
+                <div className="shrink-0 pl-1">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-red-50 text-slate-400 group-hover:text-red-600 transition-all shadow-2xs">
+                    <ChevronLeft className="h-5 w-5" />
                   </div>
-                )}
+                </div>
               </div>
             ))
           ) : (

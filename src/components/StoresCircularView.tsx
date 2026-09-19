@@ -9,8 +9,6 @@ import {
   Store,
   X,
   ShieldCheck,
-  Instagram,
-  Facebook,
   DollarSign,
   Tag,
   Briefcase,
@@ -18,6 +16,7 @@ import {
   Clock,
   Plus,
   ArrowRight,
+  ChevronLeft,
 } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
@@ -25,6 +24,7 @@ import { useCategoryAds } from '../context/CategoryAdsContext';
 import { AddCommunityPostModal } from './AddCommunityPostModal';
 import { DistrictEmergencySection } from './DistrictEmergencySection';
 import { StoreCategoryAnimatedAdBanner } from './StoreCategoryAnimatedAdBanner';
+import { openExternalUrl, openSocialMediaLink } from '../utils/socialLinks';
 
 interface StoresCircularViewProps {
   governorateId: string;
@@ -725,168 +725,36 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
         <span>{activeCategory.addLabel} في {districtName !== 'all' ? districtName : governorateName}</span>
       </button>
 
-      {/* Store & Post Cards List */}
+      {/* Store & Post Cards List - Clean, enlarged image & clear name */}
       {filteredStores.length > 0 ? (
         <div className="space-y-3">
           {filteredStores.map((store) => (
             <div
               key={store.id}
-              className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-150"
+              onClick={() => onSelectItem(store)}
+              className="group relative flex items-center gap-4 rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
             >
-              <div className="flex items-start gap-3.5">
-                {/* Enlarged Store / Item image */}
-                <div
-                  onClick={() => onSelectItem(store)}
-                  className="relative h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 cursor-pointer border border-slate-200 shadow-2xs"
-                >
-                  <img
-                    src={store.imageUrl}
-                    alt={store.name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
-                  {store.isOpen && store.itemType !== 'used_goods' && store.itemType !== 'lost_found' && (
-                    <span className="absolute bottom-1 right-1 rounded-md bg-emerald-600/90 backdrop-blur-xs px-1.5 py-0.5 text-[8px] font-bold text-white">
-                      مفتوح
-                    </span>
-                  )}
-                  {store.price && (
-                    <span className="absolute bottom-1 right-1 rounded-md bg-emerald-600 text-white px-1.5 py-0.5 text-[9px] font-bold shadow-xs">
-                      {store.price}
-                    </span>
-                  )}
-                </div>
-
-                {/* Store / Post details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-1">
-                    <h4
-                      onClick={() => onSelectItem(store)}
-                      className="font-display text-xs sm:text-sm font-extrabold text-slate-900 truncate hover:text-sky-700 cursor-pointer"
-                    >
-                      {store.name}
-                    </h4>
-                    {store.isClaimed && (
-                      <span className="flex items-center gap-0.5 rounded-md bg-sky-50 border border-sky-200/80 px-1.5 py-0.2 text-[9px] font-bold text-sky-800 flex-shrink-0">
-                        <CheckCircle2 className="h-2.5 w-2.5 text-sky-600" />
-                        موثق 👑
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-[11px] font-bold text-sky-800 bg-sky-50 px-1.5 py-0.2 rounded-md truncate">
-                      {store.subCategory || store.category}
-                    </span>
-                    {store.condition && (
-                      <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded-md">
-                        {store.condition}
-                      </span>
-                    )}
-                    {store.salary && (
-                      <span className="text-[10px] font-semibold text-indigo-800 bg-indigo-50 px-1.5 py-0.2 rounded-md">
-                        الراتب: {store.salary}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1">
-                    <MapPin className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-                    <span className="truncate">{store.address}</span>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <div className="flex items-center text-amber-500 text-[10px] font-bold">
-                      <Star className="h-3 w-3 fill-amber-400 text-amber-400 mr-0.5" />
-                      <span>{store.rating ? store.rating.toFixed(1) : '5.0'}</span>
-                    </div>
-                    <span className="text-[10px] text-slate-400">
-                      ({store.reviewsCount || 1} تقييم)
-                    </span>
-                    {store.workingHours && (
-                      <span className="text-[10px] text-slate-500 flex items-center gap-0.5 mr-1">
-                        <Clock className="h-2.5 w-2.5" />
-                        <span>{store.workingHours}</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
+              {/* Enlarged Store / Restaurant Image */}
+              <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 border border-slate-200/90 shadow-2xs">
+                <img
+                  src={store.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                  alt={store.name}
+                  className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
+                  loading="lazy"
+                />
               </div>
 
-              {/* Action Buttons (Call, WhatsApp, Social, Claim, Details) */}
-              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {/* Phone Call Button */}
-                  <a
-                    href={`tel:${store.phone}`}
-                    className="flex items-center gap-1 rounded-xl bg-emerald-50 border border-emerald-200/90 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition-colors"
-                  >
-                    <Phone className="h-3 w-3 text-emerald-600" />
-                    <span>اتصال</span>
-                  </a>
+              {/* Restaurant / Store Name - Prominent & Beautiful */}
+              <div className="flex-1 min-w-0 pr-1">
+                <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-sky-700 transition-colors leading-snug line-clamp-2">
+                  {store.name}
+                </h4>
+              </div>
 
-                  {/* WhatsApp Button */}
-                  {store.whatsapp && (
-                    <a
-                      href={`https://wa.me/${store.whatsapp.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 text-[11px] font-bold shadow-2xs transition-colors"
-                    >
-                      <MessageCircle className="h-3 w-3" />
-                      <span>واتساب</span>
-                    </a>
-                  )}
-
-                  {/* Instagram Button */}
-                  {store.instagram && (
-                    <a
-                      href={store.instagram.startsWith('http') ? store.instagram : `https://instagram.com/${store.instagram.replace('@', '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded-xl bg-pink-50 border border-pink-200 text-pink-700 hover:bg-pink-100 px-2 py-1 text-[11px] font-bold transition-colors"
-                      title="إنستغرام"
-                    >
-                      <Instagram className="h-3 w-3 text-pink-600" />
-                    </a>
-                  )}
-
-                  {/* Facebook Button */}
-                  {store.facebook && (
-                    <a
-                      href={store.facebook.startsWith('http') ? store.facebook : `https://facebook.com/${store.facebook}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 px-2 py-1 text-[11px] font-bold transition-colors"
-                      title="فيسبوك"
-                    >
-                      <Facebook className="h-3 w-3 text-blue-600" />
-                    </a>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-1">
-                  {/* Claim Store Button - Made clear and accessible per user request */}
-                  {!store.isClaimed && store.itemType !== 'used_goods' && store.itemType !== 'lost_found' && (
-                    <button
-                      type="button"
-                      onClick={() => onClaimStore(store)}
-                      className="flex items-center gap-1 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 px-2.5 py-1 text-[10px] font-extrabold transition-colors cursor-pointer"
-                      title="هل أنت صاحب هذا المتجر؟ أكد رقمك وطالب به الآن"
-                    >
-                      <ShieldCheck className="h-3 w-3 text-amber-700" />
-                      <span>المطالبة بالمتجر 🔑</span>
-                    </button>
-                  )}
-
-                  {/* Details Button */}
-                  <button
-                    type="button"
-                    onClick={() => onSelectItem(store)}
-                    className="rounded-xl bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1 text-[10px] font-bold transition-colors cursor-pointer"
-                  >
-                    التفاصيل
-                  </button>
+              {/* Left Arrow Icon indicating click to open store profile */}
+              <div className="shrink-0 pl-1">
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-sky-50 text-slate-400 group-hover:text-sky-600 transition-all shadow-2xs">
+                  <ChevronLeft className="h-5 w-5" />
                 </div>
               </div>
             </div>
@@ -907,58 +775,31 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
           {nearbyGovernorateStores.map((store) => (
             <div
               key={store.id}
-              className="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-150"
+              onClick={() => onSelectItem(store)}
+              className="group relative flex items-center gap-4 rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
             >
-              <div className="flex items-start gap-3.5">
-                <div
-                  onClick={() => onSelectItem(store)}
-                  className="relative h-20 w-20 sm:h-24 sm:w-24 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 cursor-pointer border border-slate-200 shadow-2xs"
-                >
-                  <img
-                    src={store.imageUrl}
-                    alt={store.name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    loading="lazy"
-                  />
-                  {store.isOpen && (
-                    <span className="absolute bottom-1 right-1 rounded-md bg-emerald-600/90 backdrop-blur-xs px-1.5 py-0.5 text-[8px] font-bold text-white">
-                      مفتوح
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <h4
-                    onClick={() => onSelectItem(store)}
-                    className="font-display text-xs sm:text-sm font-extrabold text-slate-900 truncate hover:text-sky-700 cursor-pointer"
-                  >
-                    {store.name}
-                  </h4>
-                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                    {store.subCategory || store.category}
-                  </p>
-                  <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1">
-                    <MapPin className="h-3 w-3 text-emerald-600 flex-shrink-0" />
-                    <span className="truncate">{store.address}</span>
-                  </div>
-                </div>
+              {/* Enlarged Store / Restaurant Image */}
+              <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 border border-slate-200/90 shadow-2xs">
+                <img
+                  src={store.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                  alt={store.name}
+                  className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
+                  loading="lazy"
+                />
               </div>
 
-              <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                <a
-                  href={`tel:${store.phone}`}
-                  className="flex items-center gap-1 rounded-xl bg-emerald-50 border border-emerald-200/90 px-2.5 py-1 text-[11px] font-bold text-emerald-800"
-                >
-                  <Phone className="h-3 w-3 text-emerald-600" />
-                  <span>اتصال</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => onSelectItem(store)}
-                  className="rounded-xl bg-slate-900 text-white px-2.5 py-1 text-[10px] font-bold cursor-pointer"
-                >
-                  التفاصيل
-                </button>
+              {/* Restaurant / Store Name - Prominent & Beautiful */}
+              <div className="flex-1 min-w-0 pr-1">
+                <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-sky-700 transition-colors leading-snug line-clamp-2">
+                  {store.name}
+                </h4>
+              </div>
+
+              {/* Left Arrow Icon indicating click to open store profile */}
+              <div className="shrink-0 pl-1">
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-sky-50 text-slate-400 group-hover:text-sky-600 transition-all shadow-2xs">
+                  <ChevronLeft className="h-5 w-5" />
+                </div>
               </div>
             </div>
           ))}
