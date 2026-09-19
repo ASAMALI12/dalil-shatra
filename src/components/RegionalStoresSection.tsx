@@ -13,6 +13,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
+import { getStoreCanonicalCategory } from '../utils/categoryMatcher';
 import { useDirectory } from '../context/DirectoryContext';
 import { useLocation } from '../context/LocationContext';
 import { openSocialMediaLink } from '../utils/socialLinks';
@@ -65,14 +66,10 @@ export const RegionalStoresSection: React.FC<RegionalStoresSectionProps> = ({
       let res = list;
       if (selectedCategoryFilter !== 'all') {
         res = res.filter((item) => {
-          const itemCat = (item.category || '').toLowerCase();
-          if (itemCat === selectedCategoryFilter) return true;
-          if (selectedCategoryFilter === 'doctors' && (itemCat.includes('طبيب') || itemCat.includes('دكتور') || itemCat.includes('صحة') || itemCat.includes('عياد') || itemCat.includes('health'))) return true;
-          if (selectedCategoryFilter === 'restaurants' && (itemCat.includes('مطعم') || itemCat.includes('كافيه') || itemCat.includes('اكل') || itemCat.includes('food') || itemCat.includes('cafe'))) return true;
-          if (selectedCategoryFilter === 'clothing' && (itemCat.includes('ملابس') || itemCat.includes('أزياء') || itemCat.includes('ازياء') || itemCat.includes('fashion') || itemCat.includes('البسة'))) return true;
-          if (selectedCategoryFilter === 'electronics' && (itemCat.includes('إلكترون') || itemCat.includes('الكترون') || itemCat.includes('موبايل') || itemCat.includes('هواتف') || itemCat.includes('تقنية'))) return true;
-          if (selectedCategoryFilter === 'services' && (itemCat.includes('خدم') || itemCat.includes('صيانة') || itemCat.includes('service'))) return true;
-          return false;
+          const canonical = getStoreCanonicalCategory(item);
+          if (selectedCategoryFilter === 'doctors') return canonical === 'medical';
+          if (selectedCategoryFilter === 'restaurants') return canonical === 'restaurants' || canonical === 'cafes';
+          return canonical === selectedCategoryFilter;
         });
       }
       if (openNowOnly) {

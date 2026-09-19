@@ -23,141 +23,95 @@ export const CATEGORY_INFO_MAP: Record<string, CategoryInfo> = {
   jobs: { id: 'jobs', name: 'فرص العمل والتوظيف', icon: '💼' },
 };
 
-export const normalizeCategoryId = (raw?: string): string => {
-  if (!raw) return 'general';
-  const s = raw.toLowerCase().trim();
+/**
+ * Strict, authoritative categorization function that maps any store or directory item
+ * cleanly to its canonical category ID based on its true function / job, preventing
+ * any cross-contamination (e.g. restaurants mixing into maintenance or vice versa).
+ */
+export const getStoreCanonicalCategory = (item?: {
+  category?: string;
+  subCategory?: string;
+  name?: string;
+  itemType?: string;
+  tags?: string[];
+}): string => {
+  if (!item) return 'services';
 
-  // 1. Restaurants & Food
+  // 1. Special directory item types take immediate precedence
+  if (item.itemType === 'used_goods' || item.category === 'used-goods') return 'used-goods';
+  if (item.itemType === 'lost_found' || item.category === 'lost-found') return 'lost-found';
+  if (item.itemType === 'job' || item.category === 'jobs') return 'jobs';
+
+  const cat = (item.category || '').toLowerCase().trim();
+
+  // 2. Primary explicit category mapping (authoritative)
+  if (cat === 'restaurants' || cat === 'restaurant' || cat === 'food') return 'restaurants';
+  if (cat === 'cafes' || cat === 'cafe' || cat === 'coffee' || cat === 'sweets') return 'cafes';
+  if (cat === 'medical' || cat === 'doctors' || cat === 'pharmacies' || cat === 'doctor' || cat === 'pharmacy') return 'medical';
+  if (cat === 'clothing' || cat === 'fashion' || cat === 'clothes') return 'clothing';
+  if (cat === 'electronics' || cat === 'mobile' || cat === 'phones' || cat === 'electronic') return 'electronics';
+  if (cat === 'supermarkets' || cat === 'supermarket' || cat === 'grocery' || cat === 'markets') return 'supermarkets';
+  if (cat === 'automotive' || cat === 'cars' || cat === 'car' || cat === 'auto') return 'automotive';
+  if (cat === 'services' || cat === 'service' || cat === 'maintenance' || cat === 'repair') return 'services';
+  if (cat === 'beauty') return 'services'; // صالونات وتجميل وعناية
+  if (cat === 'perfumes') return 'clothing'; // عطور ومكياج
+  if (cat === 'home') return 'services'; // ديكور وأثاث منزلي
+
+  // 3. High-precision keyword check strictly if category is 'general', 'other', or undefined
+  const name = (item.name || '').toLowerCase();
+  const sub = (item.subCategory || '').toLowerCase();
+
+  // Restaurants & Dining
   if (
-    s === 'restaurants' ||
-    s === 'food' ||
-    s.includes('مطعم') ||
-    s.includes('مطاعم') ||
-    s.includes('مأكول') ||
-    s.includes('وجبات') ||
-    s.includes('شاورما') ||
-    s.includes('مشويات') ||
-    s.includes('بيتزا') ||
-    s.includes('برغر') ||
-    s.includes('كباب') ||
-    s.includes('restaurant')
+    name.includes('مطعم') || name.includes('مشاوي') || name.includes('كباب') ||
+    name.includes('شاورما') || name.includes('برغر') || name.includes('بيتزا') ||
+    name.includes('قوزي') || name.includes('مندي') || name.includes('فلافل') ||
+    name.includes('مأكولات') || sub.includes('مشاوي') || sub.includes('وجبات سريعة')
   ) {
     return 'restaurants';
   }
 
-  // 2. Medical, Doctors, Clinics & Pharmacies
-  if (
-    s === 'medical' ||
-    s === 'doctor' ||
-    s === 'health' ||
-    s.includes('طبيب') ||
-    s.includes('أطباء') ||
-    s.includes('عياد') ||
-    s.includes('صيدل') ||
-    s.includes('مستشفى') ||
-    s.includes('مختبر') ||
-    s.includes('أسنان') ||
-    s.includes('باطنية') ||
-    s.includes('صحة')
-  ) {
-    return 'medical';
-  }
-
-  // 3. Clothing & Fashion
-  if (
-    s === 'clothing' ||
-    s === 'fashion' ||
-    s.includes('ملابس') ||
-    s.includes('ألبسة') ||
-    s.includes('أزياء') ||
-    s.includes('أحذية') ||
-    s.includes('حقائب') ||
-    s.includes('بوتيك') ||
-    s.includes('فساتين')
-  ) {
-    return 'clothing';
-  }
-
-  // 4. Supermarket & Grocery Stores
-  if (
-    s === 'supermarkets' ||
-    s === 'supermarket' ||
-    s === 'markets' ||
-    s.includes('سوبر') ||
-    s.includes('ماركت') ||
-    s.includes('بقالة') ||
-    s.includes('متجر') ||
-    s.includes('متاجر') ||
-    s.includes('أسواق') ||
-    s.includes('هايبر') ||
-    s.includes('غذائية')
-  ) {
-    return 'supermarkets';
-  }
-
-  // 5. Electronics & Mobiles
-  if (
-    s === 'electronics' ||
-    s === 'phones' ||
-    s.includes('موبايل') ||
-    s.includes('هواتف') ||
-    s.includes('إلكترون') ||
-    s.includes('تقني') ||
-    s.includes('لابتوب') ||
-    s.includes('كمبيوتر')
-  ) {
-    return 'electronics';
-  }
-
-  // 6. Cafes & Coffee
-  if (
-    s === 'cafes' ||
-    s === 'coffee' ||
-    s.includes('كافيه') ||
-    s.includes('مقهى') ||
-    s.includes('كوفي') ||
-    s.includes('شاي') ||
-    s.includes('عصائر') ||
-    s.includes('حلويات')
-  ) {
+  // Cafes & Coffee & Desserts
+  if (name.includes('كافيه') || name.includes('مقهى') || name.includes('كوفي') || name.includes('حلويات') || name.includes('عصائر')) {
     return 'cafes';
   }
 
-  // 7. Services & Home Maintenance
-  if (
-    s === 'services' ||
-    s === 'repair' ||
-    s.includes('خدمات') ||
-    s.includes('مهن') ||
-    s.includes('صيانة') ||
-    s.includes('تصليح') ||
-    s.includes('سباك') ||
-    s.includes('كهربائ') ||
-    s.includes('حدادة') ||
-    s.includes('نجارة')
-  ) {
-    return 'services';
+  // Medical, Clinics, Doctors, Pharmacies
+  if (name.includes('طبيب') || name.includes('عيادة') || name.includes('صيدلية') || name.includes('دكتور') || name.includes('مستشفى') || name.includes('مختبر') || name.includes('أسنان')) {
+    return 'medical';
   }
 
-  // 8. Automotive & Cars
-  if (
-    s === 'automotive' ||
-    s === 'cars' ||
-    s.includes('سيار') ||
-    s.includes('معارض') ||
-    s.includes('إطارات') ||
-    s.includes('زيوت') ||
-    s.includes('غسيل سيارات')
-  ) {
+  // Mobile & Electronics
+  if (name.includes('موبايل') || name.includes('هواتف') || name.includes('إلكترون') || name.includes('حاسبات') || name.includes('لابتوب')) {
+    return 'electronics';
+  }
+
+  // Clothing & Fashion
+  if (name.includes('ملابس') || name.includes('أزياء') || name.includes('ألبسة') || name.includes('بوتيك') || name.includes('فساتين') || name.includes('أحذية')) {
+    return 'clothing';
+  }
+
+  // Supermarkets & Groceries
+  if (name.includes('سوبر ماركت') || name.includes('سوبرماركت') || name.includes('أسواق') || name.includes('ماركت') || name.includes('بقالة')) {
+    return 'supermarkets';
+  }
+
+  // Automotive
+  if (name.includes('سيارات') || name.includes('معرض سيارات') || name.includes('قطع غيار') || name.includes('غسيل سيارات') || name.includes('زيوت سيارات')) {
     return 'automotive';
   }
 
-  // 9. Community
-  if (s === 'used-goods' || s.includes('مستعمل')) return 'used-goods';
-  if (s === 'lost-found' || s.includes('مفقود') || s.includes('موجودات')) return 'lost-found';
-  if (s === 'jobs' || s.includes('وظائف') || s.includes('عمل') || s.includes('توظيف')) return 'jobs';
+  // Home maintenance & Technical crafts
+  if (name.includes('صيانة') || name.includes('تصليح') || name.includes('تبريد') || name.includes('سباكة') || name.includes('كهرباء') || name.includes('حدادة') || name.includes('نجارة')) {
+    return 'services';
+  }
 
-  return s;
+  return 'services';
+};
+
+export const normalizeCategoryId = (raw?: string): string => {
+  if (!raw) return 'services';
+  return getStoreCanonicalCategory({ category: raw });
 };
 
 export const doesCategoryMatch = (catA?: string, catB?: string): boolean => {

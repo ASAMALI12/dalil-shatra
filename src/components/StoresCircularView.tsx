@@ -25,6 +25,7 @@ import { AddCommunityPostModal } from './AddCommunityPostModal';
 import { DistrictEmergencySection } from './DistrictEmergencySection';
 import { StoreCategoryAnimatedAdBanner } from './StoreCategoryAnimatedAdBanner';
 import { openExternalUrl, openSocialMediaLink } from '../utils/socialLinks';
+import { getStoreCanonicalCategory } from '../utils/categoryMatcher';
 
 interface StoresCircularViewProps {
   governorateId: string;
@@ -339,66 +340,9 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
     return getAdsForCategory(governorateId, districtId, activeCategory.id);
   }, [getAdsForCategory, governorateId, districtId, activeCategory]);
 
-  // Check if an item matches a specific category
+  // Check if an item matches a specific category - strictly isolated by its canonical function / job
   const itemMatchesCategory = (item: DirectoryItem, cat: CircularCategory): boolean => {
-    if (cat.id === 'used-goods') {
-      return item.itemType === 'used_goods' || item.category === 'used-goods' || item.tags?.includes('مستعمل');
-    }
-    if (cat.id === 'lost-found') {
-      return item.itemType === 'lost_found' || item.category === 'lost-found' || item.tags?.includes('مفقودات');
-    }
-    if (cat.id === 'jobs') {
-      return item.itemType === 'job' || item.category === 'jobs' || item.tags?.includes('وظائف');
-    }
-
-    const itemCat = (item.category || '').toLowerCase().trim();
-    const itemSub = (item.subCategory || '').toLowerCase().trim();
-    const itemName = (item.name || '').toLowerCase().trim();
-
-    // 1. Direct ID or slug match
-    if (itemCat === cat.id || itemCat.includes(cat.id) || cat.id.includes(itemCat)) {
-      return true;
-    }
-
-    // 2. English and Arabic category aliases match
-    const categoryAliases: Record<string, string[]> = {
-      supermarkets: ['grocery', 'market', 'supermarket', 'food', 'mart', 'بقالة', 'اسواق', 'أسواق', 'غذائية', 'سوبرماركت', 'سوبر ماركت', 'هايبر'],
-      supermarket: ['grocery', 'market', 'supermarket', 'food', 'mart', 'بقالة', 'اسواق', 'أسواق', 'غذائية', 'سوبرماركت', 'سوبر ماركت', 'هايبر'],
-      clothing: ['clothing', 'fashion', 'clothes', 'boutique', 'wear', 'dress', 'ملابس', 'أزياء', 'ازياء', 'ألبسة', 'البسة', 'بوتيك', 'أحذية', 'حقائب'],
-      restaurants: ['restaurant', 'restaurants', 'food', 'dining', 'grill', 'pizza', 'burger', 'مطعم', 'مطاعم', 'وجبات', 'مشاوي', 'شاورما', 'كباب', 'قوزي', 'سمك'],
-      cafes: ['cafe', 'cafes', 'coffee', 'espresso', 'كافيه', 'كوفي', 'مقهى', 'قهوة', 'شاي', 'عصائر', 'حلويات'],
-      medical: ['doctor', 'doctors', 'clinic', 'medical', 'hospital', 'health', 'pharmacy', 'pharmacies', 'طبيب', 'دكتور', 'عيادة', 'صحة', 'مستشفى', 'عيادات', 'صيدلية', 'صيدليات', 'دواء', 'علاج'],
-      doctors: ['doctor', 'doctors', 'clinic', 'medical', 'hospital', 'health', 'طبيب', 'دكتور', 'عيادة', 'صحة', 'مستشفى', 'عيادات'],
-      pharmacies: ['pharmacy', 'pharmacies', 'medicine', 'drugstore', 'صيدلية', 'صيدليات', 'دواء'],
-      electronics: ['electronics', 'electronic', 'mobile', 'phones', 'tech', 'computer', 'إلكترونيات', 'الكترونيات', 'موبايل', 'هواتف', 'اتصالات', 'شواحن', 'صيانة'],
-      automotive: ['cars', 'car', 'auto', 'automotive', 'سيارات', 'سيارة', 'معرض', 'قطع غيار', 'زيوت', 'غسيل', 'تبديل زيوت', 'بنشر'],
-      cars: ['cars', 'car', 'auto', 'automotive', 'سيارات', 'سيارة', 'معرض', 'قطع غيار', 'زيوت'],
-      home: ['home', 'furniture', 'decor', 'household', 'أثاث', 'منزلي', 'ديكور', 'مفروشات'],
-      perfumes: ['perfume', 'perfumes', 'fragrance', 'cosmetics', 'beauty', 'عطور', 'عطر', 'تجميل', 'مكياج', 'بخور'],
-      sweets: ['sweets', 'sweet', 'bakery', 'pastry', 'dessert', 'حلويات', 'كيك', 'معجنات', 'بقلاوة'],
-      services: ['services', 'service', 'maintenance', 'repair', 'خدمات', 'صيانة', 'تصليح', 'تبريد', 'كهرباء', 'سبالت', 'تأسيسات'],
-      'used-goods': ['مستعمل', 'مستعملة', 'بالة', 'used', 'used_goods', 'أجهزة مستعملة', 'سيارات مستعملة', 'أثاث مستعمل'],
-      'lost-found': ['مفقود', 'مفقودات', 'موجودات', 'ضائع', 'lost', 'found', 'lost_found'],
-      jobs: ['وظائف', 'وظيفة', 'عمل', 'عمال', 'موظف', 'كاشير', 'مندوب', 'job', 'jobs'],
-    };
-
-    if (categoryAliases[cat.id]?.some((alias) => itemCat.includes(alias) || itemSub.includes(alias))) {
-      return true;
-    }
-
-    // 3. Arabic title & shortTitle match
-    if (itemCat.includes(cat.title.toLowerCase()) || itemCat.includes(cat.shortTitle.toLowerCase())) {
-      return true;
-    }
-
-    // 4. Tags match
-    return cat.tagsMatch.some(
-      (tag) =>
-        itemCat.includes(tag) ||
-        itemSub.includes(tag) ||
-        itemName.includes(tag) ||
-        item.tags?.some((t) => t.toLowerCase().includes(tag))
-    );
+    return getStoreCanonicalCategory(item) === cat.id;
   };
 
   // Filter items matching governorate, district, category, and search query

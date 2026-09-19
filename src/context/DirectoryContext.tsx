@@ -12,6 +12,7 @@ import {
   seedStoresToSupabase,
 } from '../services/supabaseStores';
 import { validateIraqPhone, normalizeIraqPhone } from '../utils/iraqPhoneValidator';
+import { getStoreCanonicalCategory } from '../utils/categoryMatcher';
 
 interface DirectoryContextType {
   items: DirectoryItem[];
@@ -388,10 +389,10 @@ export const DirectoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const getItemCountByCategory = (categoryId: string): number => {
     if (categoryId === 'all') return items.length;
     return items.filter((item) => {
-      const itemCat = (item.category || '').toLowerCase();
-      if (itemCat === categoryId.toLowerCase()) return true;
-      if (item.tags?.some((t) => t.toLowerCase() === categoryId.toLowerCase())) return true;
-      return false;
+      const canonical = getStoreCanonicalCategory(item);
+      if (categoryId === 'doctors' && canonical === 'medical') return true;
+      if (categoryId === 'pharmacies' && (canonical === 'medical' && item.category === 'pharmacies')) return true;
+      return canonical === categoryId;
     }).length;
   };
 
@@ -399,15 +400,11 @@ export const DirectoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const categories = useMemo(() => {
     return CATEGORIES_DATA.map((cat) => {
       const count = items.filter((item) => {
-        const itemCat = (item.category || '').toLowerCase();
-        if (itemCat === cat.id) return true;
-        if (cat.id === 'doctors' && (itemCat.includes('طبيب') || itemCat.includes('صحة') || itemCat.includes('عياد'))) return true;
-        if (cat.id === 'clothing' && (itemCat.includes('ملابس') || itemCat.includes('أزياء') || itemCat.includes('ازياء'))) return true;
-        if (cat.id === 'restaurants' && (itemCat.includes('مطعم') || itemCat.includes('كافيه') || itemCat.includes('اكل'))) return true;
-        if (cat.id === 'pharmacies' && (itemCat.includes('صيدل') || itemCat.includes('دواء'))) return true;
-        if (cat.id === 'electronics' && (itemCat.includes('إلكترون') || itemCat.includes('موبايل') || itemCat.includes('هواتف'))) return true;
-        if (cat.id === 'services' && (itemCat.includes('خدم') || itemCat.includes('صيان'))) return true;
-        return false;
+        const canonical = getStoreCanonicalCategory(item);
+        if (cat.id === 'doctors') return canonical === 'medical';
+        if (cat.id === 'pharmacies') return canonical === 'medical' && item.category === 'pharmacies';
+        if (cat.id === 'beauty') return item.category === 'beauty';
+        return canonical === cat.id;
       }).length;
       return {
         ...cat,

@@ -3,6 +3,7 @@ import { X, Search, ChevronLeft, ArrowRight, MapPin, Globe } from 'lucide-react'
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
 import { useLocation } from '../context/LocationContext';
+import { getStoreCanonicalCategory } from '../utils/categoryMatcher';
 
 interface CategoryListModalProps {
   categoryId: string | null;
@@ -28,7 +29,11 @@ export const CategoryListModal: React.FC<CategoryListModalProps> = ({
 
     let list = items.filter((item) => {
       if (categoryId === 'other') return true;
-      return item.category === categoryId;
+      const canonical = getStoreCanonicalCategory(item);
+      if (categoryId === 'doctors') return canonical === 'medical';
+      if (categoryId === 'pharmacies') return canonical === 'medical' && item.category === 'pharmacies';
+      if (categoryId === 'beauty') return item.category === 'beauty';
+      return canonical === categoryId;
     });
 
     // Location Scope
