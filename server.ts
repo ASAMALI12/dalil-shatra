@@ -1453,7 +1453,17 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
         }
         const { data, error } = await query;
         if (!error && Array.isArray(data) && data.length > 0) {
-          return res.json({ success: true, count: data.length, news: data, source: "supabase" });
+          let filtered = data;
+          if (districtName && districtName !== "الكل") {
+            const cleanD = districtName.replace(/^(قضاء|ناحية)\s+/, "").trim().toLowerCase();
+            filtered = data.filter((item: any) => {
+              const text = `${item.title || ""} ${item.content || ""}`.toLowerCase();
+              return (item.district_id && item.district_id.toLowerCase().includes(cleanD)) || text.includes(cleanD);
+            });
+          }
+          if (filtered.length > 0) {
+            return res.json({ success: true, count: filtered.length, news: filtered, source: "supabase" });
+          }
         }
       } catch (e) {
         console.warn("Supabase news error:", e);

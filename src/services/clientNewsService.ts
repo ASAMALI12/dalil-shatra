@@ -5,6 +5,7 @@ import { CITY_NEWS_DATA } from '../data/shatrahData';
 import { COMPREHENSIVE_IRAQ_NEWS } from '../data/iraqNewsData';
 import { getApiUrl } from '../utils/apiClient';
 import { fetchNewsFromSupabase } from './supabaseNews';
+import { matchesDistrict, matchesGovernorate, normalizeGovId } from './liveIraqNewsService';
 
 export interface FetchNewsOptions {
   governorateId?: string;
@@ -260,7 +261,7 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.news) && json.news.length > 0) {
-        const mapped: CityNews[] = json.news.map((n: any, idx: number) => ({
+        let mapped: CityNews[] = json.news.map((n: any, idx: number) => ({
           id: n.id || `api-${idx}`,
           title: n.title,
           summary: n.summary || n.content || n.title,
@@ -275,8 +276,17 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
           isUrgent: Boolean(n.isUrgent),
         }));
 
-        saveToCache(cacheKey, mapped);
-        return mapped;
+        // Strict boundary enforcement:
+        if (filterMode === 'district' || cleanDistrict) {
+          mapped = mapped.filter((item) => matchesDistrict(item, cleanDistrict));
+        } else if (filterMode === 'city' || (governorateId && governorateId !== 'all')) {
+          mapped = mapped.filter((item) => matchesGovernorate(item, governorateId));
+        }
+
+        if (mapped.length > 0) {
+          saveToCache(cacheKey, mapped);
+          return mapped;
+        }
       }
     }
   } catch {
@@ -316,7 +326,12 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
 
           if (capRes.status === 200 && capRes.data) {
             const xmlText = typeof capRes.data === 'string' ? capRes.data : JSON.stringify(capRes.data);
-            const parsedItems = parseRssXml(xmlText, governorateId, cleanDistrict || undefined);
+            let parsedItems = parseRssXml(xmlText, governorateId, cleanDistrict || undefined);
+            if (filterMode === 'district' || cleanDistrict) {
+              parsedItems = parsedItems.filter((item) => matchesDistrict(item, cleanDistrict));
+            } else if (filterMode === 'city' || (governorateId && governorateId !== 'all')) {
+              parsedItems = parsedItems.filter((item) => matchesGovernorate(item, governorateId));
+            }
             if (parsedItems.length > 0) {
               saveToCache(cacheKey, parsedItems);
               return parsedItems;
@@ -361,7 +376,7 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
           if (contentType.includes('application/json') || endpoint.includes('rss2json')) {
             const json = await res.json();
             if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
-              const items: CityNews[] = json.items.map((item: any, idx: number) => {
+              let items: CityNews[] = json.items.map((item: any, idx: number) => {
                 const rawTitle = cleanHtml(item.title || '');
                 const rawDesc = cleanHtml(item.description || item.content || '');
                 const { title, source } = normalizeSource(item.author || '', rawTitle);
@@ -389,6 +404,12 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
                 };
               });
 
+              if (filterMode === 'district' || cleanDistrict) {
+                items = items.filter((item) => matchesDistrict(item, cleanDistrict));
+              } else if (filterMode === 'city' || (governorateId && governorateId !== 'all')) {
+                items = items.filter((item) => matchesGovernorate(item, governorateId));
+              }
+
               if (items.length > 0) {
                 saveToCache(cacheKey, items);
                 return items;
@@ -397,7 +418,12 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
           } else {
             // Raw XML returned through proxy
             const xmlText = await res.text();
-            const parsedItems = parseRssXml(xmlText, governorateId, cleanDistrict || undefined);
+            let parsedItems = parseRssXml(xmlText, governorateId, cleanDistrict || undefined);
+            if (filterMode === 'district' || cleanDistrict) {
+              parsedItems = parsedItems.filter((item) => matchesDistrict(item, cleanDistrict));
+            } else if (filterMode === 'city' || (governorateId && governorateId !== 'all')) {
+              parsedItems = parsedItems.filter((item) => matchesGovernorate(item, governorateId));
+            }
             if (parsedItems.length > 0) {
               saveToCache(cacheKey, parsedItems);
               return parsedItems;
@@ -418,7 +444,7 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
   try {
     const supaNews = await fetchNewsFromSupabase();
     if (supaNews && supaNews.length > 0) {
-      const mapped: CityNews[] = supaNews.map((sn, idx) => ({
+      let mapped: CityNews[] = supaNews.map((sn, idx) => ({
         id: sn.id || `supa-${idx}`,
         title: sn.title,
         summary: sn.content || sn.title,
@@ -430,8 +456,17 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
         districtId: sn.districtId,
         readTime: 'دقيقتان',
       }));
-      saveToCache(cacheKey, mapped);
-      return mapped;
+
+      if (filterMode === 'district' || cleanDistrict) {
+        mapped = mapped.filter((item) => matchesDistrict(item, cleanDistrict));
+      } else if (filterMode === 'city' || (governorateId && governorateId !== 'all')) {
+        mapped = mapped.filter((item) => matchesGovernorate(item, governorateId));
+      }
+
+      if (mapped.length > 0) {
+        saveToCache(cacheKey, mapped);
+        return mapped;
+      }
     }
   } catch {}
 
@@ -447,76 +482,30 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
           return parsed.items;
         }
       }
-
-      // Check global general cache
-      const generalCache = window.localStorage.getItem('dalil_iraq_news_v2_all_all_all');
-      if (generalCache) {
-        const parsed = JSON.parse(generalCache);
-        if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
-          return parsed.items;
-        }
-      }
     } catch {}
   }
 
   // -------------------------------------------------------------
-  // Layer 6: Comprehensive Curated Local Iraq News (Reliable, high-quality, always available)
+  // Layer 6: Comprehensive Curated Local Iraq News (Reliable, high-quality, strictly regional)
   // -------------------------------------------------------------
   const allAvailableNews: CityNews[] = [
     ...COMPREHENSIVE_IRAQ_NEWS,
     ...CITY_NEWS_DATA,
   ];
 
-  // 1. Exact district match
-  const districtMatched = allAvailableNews.filter((n) => {
-    if (cleanDistrict && n.districtId) {
-      return (
-        n.districtId === cleanDistrict ||
-        n.districtId.includes(cleanDistrict) ||
-        cleanDistrict.includes(n.districtId)
-      );
-    }
-    return false;
-  });
+  const isDistrictMode = filterMode === 'district' || Boolean(cleanDistrict);
+  const isGovMode = !isDistrictMode && Boolean(governorateId && governorateId !== 'all');
 
-  // 2. Governorate match
-  const govMatched = allAvailableNews.filter((n) => {
-    if (governorateId && governorateId !== 'all') {
-      return n.governorateId === governorateId;
-    }
-    return true;
-  });
+  let baseList: CityNews[] = [];
 
-  // Compose result: prioritize district news, then governorate news, then general Iraq news
-  const seenIds = new Set<string>();
-  const combinedList: CityNews[] = [];
-
-  for (const item of districtMatched) {
-    if (!seenIds.has(item.title)) {
-      seenIds.add(item.title);
-      combinedList.push(item);
-    }
+  if (isDistrictMode && cleanDistrict) {
+    baseList = allAvailableNews.filter((n) => matchesDistrict(n, cleanDistrict));
+  } else if (isGovMode && governorateId) {
+    baseList = allAvailableNews.filter((n) => matchesGovernorate(n, governorateId));
+  } else {
+    baseList = allAvailableNews;
   }
 
-  for (const item of govMatched) {
-    if (!seenIds.has(item.title)) {
-      seenIds.add(item.title);
-      combinedList.push(item);
-    }
-  }
-
-  // If still fewer than 5 items, pad with national Iraqi news
-  if (combinedList.length < 5) {
-    for (const item of allAvailableNews) {
-      if (!seenIds.has(item.title)) {
-        seenIds.add(item.title);
-        combinedList.push(item);
-        if (combinedList.length >= 12) break;
-      }
-    }
-  }
-
-  const baseList = combinedList.length > 0 ? combinedList : allAvailableNews;
   const now = new Date();
   const timeLabels = [
     'منذ 10 دقائق',
@@ -536,7 +525,9 @@ export async function fetchLiveCityNews(options: FetchNewsOptions = {}): Promise
     date: idx < timeLabels.length ? timeLabels[idx] : item.date,
   }));
 
-  saveToCache(cacheKey, refreshedCurated);
+  if (refreshedCurated.length > 0) {
+    saveToCache(cacheKey, refreshedCurated);
+  }
   return refreshedCurated;
 }
 

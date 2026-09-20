@@ -28,11 +28,21 @@ export const CategoryListModal: React.FC<CategoryListModalProps> = ({
     if (!categoryId) return [];
 
     let list = items.filter((item) => {
-      if (categoryId === 'other') return true;
       const canonical = getStoreCanonicalCategory(item);
       if (categoryId === 'doctors') return canonical === 'medical';
-      if (categoryId === 'pharmacies') return canonical === 'medical' && item.category === 'pharmacies';
-      if (categoryId === 'beauty') return item.category === 'beauty';
+      if (categoryId === 'pharmacies') return canonical === 'medical' && (item.category === 'pharmacies' || (item.name && item.name.includes('صيدلية')));
+      if (categoryId === 'restaurants') return canonical === 'restaurants' || canonical === 'cafes';
+      if (categoryId === 'services') return canonical === 'services';
+      if (categoryId === 'beauty') return item.category === 'beauty' || (item.name && (item.name.includes('صالون') || item.name.includes('كوافير') || item.name.includes('تجميل')));
+      if (categoryId === 'other') {
+        return (
+          canonical === 'used-goods' ||
+          canonical === 'lost-found' ||
+          canonical === 'jobs' ||
+          canonical === 'automotive' ||
+          (!['medical', 'clothing', 'restaurants', 'cafes', 'electronics', 'services', 'supermarkets'].includes(canonical))
+        );
+      }
       return canonical === categoryId;
     });
 

@@ -16,6 +16,7 @@ import { CityNews } from '../types/shatrah';
 import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
 import { useLocation } from '../context/LocationContext';
 import { fetchLiveCityNews } from '../services/clientNewsService';
+import { matchesDistrict, matchesGovernorate } from '../services/liveIraqNewsService';
 
 interface NewsModalProps {
   isOpen: boolean;
@@ -129,6 +130,13 @@ export const NewsModal: React.FC<NewsModalProps> = ({
   };
 
   const filteredNews = newsList.filter((news) => {
+    // Strict Scope check:
+    if (filterMode === 'district' && selectedDistrictName) {
+      if (!matchesDistrict(news, selectedDistrictName)) return false;
+    } else if (filterMode === 'city' && selectedGovId && selectedGovId !== 'all') {
+      if (!matchesGovernorate(news, selectedGovId)) return false;
+    }
+
     // 1. Source filter
     if (selectedSource !== 'all' && news.source !== selectedSource) {
       return false;

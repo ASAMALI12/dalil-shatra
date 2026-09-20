@@ -34,11 +34,26 @@ export interface DirectoryItem {
   tiktok?: string;
   telegram?: string;
   website?: string;
+  lat?: number;
+  lng?: number;
+  googleMapsUrl?: string;
+  menu?: StoreMenuItem[];
+  menuImages?: string[];
   itemType?: 'store' | 'used_goods' | 'lost_found' | 'job';
   price?: string;
   condition?: string;
   salary?: string;
   jobType?: string;
+}
+
+export interface StoreMenuItem {
+  id: string;
+  name: string;
+  price: string;
+  category?: string;
+  description?: string;
+  imageUrl?: string;
+  popular?: boolean;
 }
 
 export interface StoreClaim {

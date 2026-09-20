@@ -2,14 +2,12 @@ import React, { useState } from 'react';
 import {
   X,
   MessageCircle,
-  Instagram,
   Copy,
   Check,
-  Download,
   Share2,
-  ExternalLink,
-  Smartphone,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { DirectoryItem } from '../types/shatrah';
 
 interface StoreShareModalProps {
@@ -24,23 +22,25 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
   item,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [statusNotification, setStatusNotification] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const currentOrigin = window.location.origin;
   const currentPath = window.location.pathname;
-  // Deep link targeting the store directly with auto-prompt to install/open the app
-  const shareUrl = `${currentOrigin}${currentPath}?storeId=${encodeURIComponent(item.id)}&action=download_app`;
+  // Clean direct store link
+  const shareUrl = `${currentOrigin}${currentPath}?storeId=${encodeURIComponent(item.id)}`;
   const locationInfo = item.governorateName
-    ? `${item.governorateName} - ${item.districtName || ''}`
+    ? `${item.governorateName}${item.districtName ? ` - ${item.districtName}` : ''}`
     : item.districtName || 'العراق';
 
-  const shareText = `📍 ${item.name} (${item.subCategory || item.category || 'متجر'})\nالموقع: ${locationInfo}\nهاتف: ${item.phone}\n\n📲 حمّل وافتح تطبيق دليل العراق لتصفح هذا المتجر والتواصل المباشر معه:\n${shareUrl}`;
+  const shareText = `📍 ${item.name}${item.subCategory ? ` (${item.subCategory})` : ''}\nالموقع: ${locationInfo}\nهاتف: ${item.phone}\n\nرابط المتجر:\n${shareUrl}`;
 
-  const handleCopyLink = async () => {
+  // Synchronous clipboard copy
+  const copyShareTextToClipboard = (customNotice?: string) => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(shareText);
+        navigator.clipboard.writeText(shareText).catch(() => {});
       } else {
         const textarea = document.createElement('textarea');
         textarea.value = shareText;
@@ -51,71 +51,43 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch (e) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
+    } catch (e) {}
+    setCopied(true);
+    setStatusNotification(customNotice || 'تم نسخ تفاصيل ورابط المتجر بنجاح ✅');
+    setTimeout(() => {
+      setCopied(false);
+      setStatusNotification(null);
+    }, 3500);
+  };
+
+  // Safe universal URL launcher (Native Capacitor or Web)
+  const openUrlSafely = (url: string) => {
+    if (!url) return;
+    if (Capacitor.isNativePlatform()) {
+      Browser.open({ url, windowName: '_system' }).catch(() => {
+        try {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (e) {
+          window.location.href = url;
+        }
+      });
+      return;
+    }
+    try {
+      const newWin = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
+        window.location.href = url;
+      }
+    } catch (err) {
+      window.location.href = url;
     }
   };
 
-  // 1. WhatsApp Sharing
+  // WhatsApp Sharing ONLY
   const handleShareWhatsApp = () => {
+    copyShareTextToClipboard('تم نسخ التفاصيل! جارٍ فتح واتساب للمشاركة...');
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
-    window.open(waUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  // 2. Facebook Messenger Chat Sharing (فتح محادثات ماسنجر مباشرة للمشاركة)
-  const handleShareMessenger = async () => {
-    // Copy store info & link to clipboard first
-    await handleCopyLink();
-
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      // Open Messenger app chat share picker directly
-      window.location.href = `fb-messenger://share/?link=${encodeURIComponent(shareUrl)}`;
-      // Fallback to Messenger chats if app is not intercepted
-      setTimeout(() => {
-        window.open('https://www.messenger.com/new', '_blank', 'noopener,noreferrer');
-      }, 1200);
-    } else {
-      // Desktop: Open Messenger chat composer directly (not Facebook feed/post)
-      window.open('https://www.messenger.com/new', '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  // 3. Instagram Direct Message Sharing (فتح محادثات الرسائل الخاصة DM مباشرة)
-  const handleShareInstagram = async () => {
-    // Copy text & link first so user can easily paste into Instagram DM chat
-    await handleCopyLink();
-
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (isMobile) {
-      // Open Instagram app Direct Messages inbox directly
-      window.location.href = 'instagram://direct-inbox';
-      // Fallback to Instagram DM web inbox if app is not intercepted
-      setTimeout(() => {
-        window.open('https://www.instagram.com/direct/inbox/', '_blank', 'noopener,noreferrer');
-      }, 1200);
-    } else {
-      // Desktop: Open Instagram Direct Messages inbox directly (not Instagram home feed)
-      window.open('https://www.instagram.com/direct/inbox/', '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  // 4. Native OS Share (if available)
-  const handleNativeShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${item.name} | تطبيق دليل العراق`,
-          text: `📍 تصفح متجر ${item.name} وحمّل تطبيق دليل العراق:\n${shareText}`,
-          url: shareUrl,
-        });
-        return;
-      } catch (e) {}
-    }
-    handleCopyLink();
+    openUrlSafely(waUrl);
   };
 
   return (
@@ -130,15 +102,15 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-sky-50 text-sky-600 border border-sky-200/80">
-              <Share2 className="h-4 w-4" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/80">
+              <MessageCircle className="h-4 w-4" />
             </div>
             <div>
               <h3 className="font-display text-xs sm:text-sm font-black text-slate-900">
                 مشاركة متجر {item.name}
               </h3>
               <p className="text-[10px] text-slate-500">
-                شارك الرابط وسيطلب من الزائر تحميل التطبيق
+                المشاركة المباشرة عبر تطبيق واتساب
               </p>
             </div>
           </div>
@@ -154,72 +126,39 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-4 space-y-4 text-right">
-          {/* App download notification banner */}
-          <div className="flex items-start gap-2.5 rounded-2xl bg-gradient-to-r from-sky-50 to-blue-50 border border-sky-200/90 p-3 text-sky-950 shadow-2xs">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-600 text-white shadow-xs">
-              <Smartphone className="h-4 w-4" />
-            </div>
-            <div className="text-[11px] leading-relaxed">
-              <span className="font-bold text-sky-900 block text-xs">
-                رابط ذكي يطلب تحميل التطبيق 📲
-              </span>
-              عند فتح الرابط من قبل أي شخص سيظهر له المتجر مباشرةً مع نافذة تنزيل وتثبيت تطبيق دليل العراق على هاتفه.
-            </div>
-          </div>
-
-          {/* Social Media Sharing Buttons */}
+          {/* Main WhatsApp Share Button */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">
-              اختر التطبيق للمشاركة الفورية:
+              المشاركة عبر تطبيق واتساب:
             </label>
-            <div className="grid grid-cols-3 gap-2.5">
-              {/* 1. واتساب WhatsApp */}
-              <button
-                type="button"
-                onClick={handleShareWhatsApp}
-                className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/90 p-3 text-emerald-900 transition-all cursor-pointer active:scale-95 group shadow-2xs"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-xs group-hover:scale-105 transition-transform">
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="w-full flex items-center justify-between gap-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white p-3.5 transition-all cursor-pointer shadow-md group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/20 text-white shadow-inner group-hover:scale-105 transition-transform">
                   <MessageCircle className="h-6 w-6" />
                 </div>
-                <span className="font-display text-xs font-bold">واتساب</span>
-                <span className="text-[9px] text-emerald-700">WhatsApp</span>
-              </button>
-
-              {/* 2. ماسنجر Messenger */}
-              <button
-                type="button"
-                onClick={handleShareMessenger}
-                className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-sky-50 hover:bg-sky-100/80 border border-sky-200/90 p-3 text-sky-900 transition-all cursor-pointer active:scale-95 group shadow-2xs"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-500 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
-                    <path d="M12 2C6.477 2 2 6.145 2 11.258c0 2.91 1.453 5.518 3.731 7.228V22l3.372-1.854c.91.252 1.88.388 2.897.388 5.523 0 10-4.145 10-9.276C22 6.145 17.523 2 12 2zm1.066 12.443l-2.73-2.912-5.326 2.912 5.86-6.22 2.798 2.912 5.258-2.912-5.86 6.22z"/>
-                  </svg>
+                <div className="text-right">
+                  <span className="font-display text-sm font-bold block">
+                    إرسال ومشاركة عبر واتساب 💬
+                  </span>
+                  <span className="text-[11px] text-emerald-100 block">
+                    إرسال بيانات ورابط المتجر لأي جهة اتصال أو مجموعة
+                  </span>
                 </div>
-                <span className="font-display text-xs font-bold">ماسنجر</span>
-                <span className="text-[9px] text-sky-700">Messenger</span>
-              </button>
-
-              {/* 3. انستغرام Instagram */}
-              <button
-                type="button"
-                onClick={handleShareInstagram}
-                className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-gradient-to-b from-rose-50 to-pink-50 hover:from-rose-100/80 hover:to-pink-100/80 border border-pink-200/90 p-3 text-pink-950 transition-all cursor-pointer active:scale-95 group shadow-2xs"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white shadow-xs group-hover:scale-105 transition-transform">
-                  <Instagram className="h-6 w-6" />
-                </div>
-                <span className="font-display text-xs font-bold">انستغرام</span>
-                <span className="text-[9px] text-pink-700">Instagram</span>
-              </button>
-            </div>
+              </div>
+              <span className="text-xs bg-white/20 px-2.5 py-1 rounded-lg font-bold shrink-0">
+                فتح الآن
+              </span>
+            </button>
           </div>
 
-          {/* Copy Link Input Section */}
-          <div className="space-y-1.5">
+          {/* Copy Direct Link Section */}
+          <div className="space-y-1.5 pt-1">
             <label className="block text-[11px] font-bold text-slate-600">
-              أو انسخ الرابط المباشر للمتجر مع طلب التنزيل:
+              أو نسخ رابط المتجر المباشر:
             </label>
             <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 p-1.5">
               <input
@@ -230,7 +169,7 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
               />
               <button
                 type="button"
-                onClick={handleCopyLink}
+                onClick={() => copyShareTextToClipboard()}
                 className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs ${
                   copied
                     ? 'bg-emerald-600 text-white'
@@ -250,24 +189,12 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
                 )}
               </button>
             </div>
-            {copied && (
-              <p className="text-[10px] text-emerald-700 font-bold text-center mt-1">
-                ✅ تم نسخ نص المشاركة والرابط إلى الحافظة بنجاح!
+            {statusNotification && (
+              <p className="text-[11px] text-emerald-700 font-bold text-center mt-1 bg-emerald-50 rounded-lg py-1 border border-emerald-200 animate-in fade-in">
+                {statusNotification}
               </p>
             )}
           </div>
-
-          {/* More sharing options (Native Android / iOS Sheet) */}
-          {typeof navigator !== 'undefined' && 'share' in navigator && (
-            <button
-              type="button"
-              onClick={handleNativeShare}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 py-2.5 px-3 text-xs font-bold transition-all cursor-pointer active:scale-98 border border-slate-200"
-            >
-              <Share2 className="h-4 w-4 text-slate-600" />
-              <span>مشاركة عبر تطبيقات أخرى على هاتفك...</span>
-            </button>
-          )}
         </div>
 
         {/* Footer */}

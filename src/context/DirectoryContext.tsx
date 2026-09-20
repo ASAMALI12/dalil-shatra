@@ -390,8 +390,20 @@ export const DirectoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (categoryId === 'all') return items.length;
     return items.filter((item) => {
       const canonical = getStoreCanonicalCategory(item);
-      if (categoryId === 'doctors' && canonical === 'medical') return true;
-      if (categoryId === 'pharmacies' && (canonical === 'medical' && item.category === 'pharmacies')) return true;
+      if (categoryId === 'doctors') return canonical === 'medical';
+      if (categoryId === 'pharmacies') return canonical === 'medical' && (item.category === 'pharmacies' || (item.name && item.name.includes('صيدلية')));
+      if (categoryId === 'restaurants') return canonical === 'restaurants' || canonical === 'cafes';
+      if (categoryId === 'services') return canonical === 'services';
+      if (categoryId === 'beauty') return item.category === 'beauty' || (item.name && (item.name.includes('صالون') || item.name.includes('كوافير') || item.name.includes('تجميل')));
+      if (categoryId === 'other') {
+        return (
+          canonical === 'used-goods' ||
+          canonical === 'lost-found' ||
+          canonical === 'jobs' ||
+          canonical === 'automotive' ||
+          (!['medical', 'clothing', 'restaurants', 'cafes', 'electronics', 'services', 'supermarkets'].includes(canonical))
+        );
+      }
       return canonical === categoryId;
     }).length;
   };
@@ -402,8 +414,19 @@ export const DirectoryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const count = items.filter((item) => {
         const canonical = getStoreCanonicalCategory(item);
         if (cat.id === 'doctors') return canonical === 'medical';
-        if (cat.id === 'pharmacies') return canonical === 'medical' && item.category === 'pharmacies';
-        if (cat.id === 'beauty') return item.category === 'beauty';
+        if (cat.id === 'pharmacies') return canonical === 'medical' && (item.category === 'pharmacies' || (item.name && item.name.includes('صيدلية')));
+        if (cat.id === 'restaurants') return canonical === 'restaurants' || canonical === 'cafes';
+        if (cat.id === 'services') return canonical === 'services';
+        if (cat.id === 'beauty') return item.category === 'beauty' || (item.name && (item.name.includes('صالون') || item.name.includes('كوافير') || item.name.includes('تجميل')));
+        if (cat.id === 'other') {
+          return (
+            canonical === 'used-goods' ||
+            canonical === 'lost-found' ||
+            canonical === 'jobs' ||
+            canonical === 'automotive' ||
+            (!['medical', 'clothing', 'restaurants', 'cafes', 'electronics', 'services', 'supermarkets'].includes(canonical))
+          );
+        }
         return canonical === cat.id;
       }).length;
       return {

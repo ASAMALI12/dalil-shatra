@@ -29,10 +29,14 @@ import {
   ChevronRight,
   Upload,
   Image as ImageIcon,
+  UtensilsCrossed,
 } from 'lucide-react';
-import { DirectoryItem } from '../types/shatrah';
+import { DirectoryItem, StoreMenuItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
 import { StoreShareModal } from './StoreShareModal';
+import { StoreLocationMap } from './StoreLocationMap';
+import { StoreMenuSection } from './StoreMenuSection';
+import { EditStoreMenuModal } from './EditStoreMenuModal';
 import {
   formatTikTokUrl,
   formatTelegramUrl,
@@ -95,11 +99,18 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   onEditStore,
   onReportStore,
 }) => {
-  const { deleteStore, isUserStoreOwner, updateStore, unclaimStore } = useDirectory();
+  const { deleteStore, isUserStoreOwner, updateStore, unclaimStore, items } = useDirectory();
+
+  // Always use the latest live store data from directory state
+  const currentStore = (items && items.find((i) => i.id === item?.id)) || item;
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Menu & Location interactive states
+  const [showMenuEditor, setShowMenuEditor] = useState(false);
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 
   // Gallery & Image Management states (Restricted strictly to Store Owner)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -110,17 +121,23 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
 
   if (!item) return null;
 
-  const isOwner = isUserStoreOwner(item.id);
+  const isOwner = isUserStoreOwner(currentStore.id);
   const canManagePhotos = isOwner;
 
+  const handleSaveMenu = (newMenu: StoreMenuItem[], newMenuImages: string[]) => {
+    updateStore(currentStore.id, { menu: newMenu, menuImages: newMenuImages });
+    setStatusMessage('تم حفظ وتحديث المنيو وقائمة الأسعار بنجاح ✅');
+    setTimeout(() => setStatusMessage(null), 3500);
+  };
+
   // Build the list of images for this store
-  const currentImages: string[] = Array.isArray(item.images) && item.images.length > 0
-    ? item.images
-    : (item.imageUrl ? [item.imageUrl] : []);
+  const currentImages: string[] = Array.isArray(currentStore.images) && currentStore.images.length > 0
+    ? currentStore.images
+    : (currentStore.imageUrl ? [currentStore.imageUrl] : []);
 
   const handleToggleOpenStatus = () => {
-    const newStatus = !item.isOpen;
-    updateStore(item.id, { isOpen: newStatus });
+    const newStatus = !currentStore.isOpen;
+    updateStore(currentStore.id, { isOpen: newStatus });
     setStatusMessage(
       newStatus
         ? 'تم فتح المتجر بنجاح لاستقبال طلبات الزبائن 🟢'
@@ -603,6 +620,25 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
           )}
 
           {/* =========================================================================
+              STORE MENU & PRICE LIST (منيو وقائمة الأسعار للمتجر)
+              ========================================================================= */}
+          <StoreMenuSection
+            item={currentStore}
+            isOwner={isOwner}
+            onOpenMenuEditor={() => setShowMenuEditor(true)}
+            onOpenImageZoom={(url) => setZoomImageUrl(url)}
+          />
+
+          {/* =========================================================================
+              STORE GEOGRAPHIC LOCATION & MAP (موقع وخريطة المتجر والاتجاهات)
+              ========================================================================= */}
+          <StoreLocationMap
+            item={currentStore}
+            isOwner={isOwner}
+            onOpenEditLocation={() => onEditStore?.(currentStore)}
+          />
+
+          {/* =========================================================================
               STORE OWNER CONTROLS (إدارة وتعديل المتجر لمالكه الموثق)
               ========================================================================= */}
           {isOwner && (
@@ -615,7 +651,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
                       أنت المالك الموثق لهذا المتجر 👑
                     </span>
                     <span className="text-[10px] text-emerald-700">
-                      يمكنك تعديل بيانات المتجر بالكامل وإضافة الصور والغلاف
+                      يمكنك تعديل بيانات المتجر بالكامل وإضافة الصور والمنيو والأسعار
                     </span>
                   </div>
                 </div>
@@ -630,24 +666,32 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {onEditStore && (
                   <button
                     type="button"
                     onClick={() => onEditStore(item)}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-white border border-emerald-300 py-2.5 px-3 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition-colors cursor-pointer shadow-2xs"
+                    className="flex items-center justify-center gap-1.5 rounded-xl bg-white border border-emerald-300 py-2.5 px-2 text-xs font-bold text-emerald-900 hover:bg-emerald-100 transition-colors cursor-pointer shadow-2xs"
                   >
                     <Edit3 className="h-4 w-4 text-emerald-700" />
-                    <span>تعديل معلومات المتجر ✏️</span>
+                    <span>تعديل المعلومات ✏️</span>
                   </button>
                 )}
                 <button
                   type="button"
+                  onClick={() => setShowMenuEditor(true)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white py-2.5 px-2 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                >
+                  <UtensilsCrossed className="h-4 w-4" />
+                  <span>المنيو والأسعار 📋</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowImageManager(true)}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 px-3 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 px-2 text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                 >
                   <Camera className="h-4 w-4" />
-                  <span>إضافة وتعديل صور المتجر 📸</span>
+                  <span>صور المتجر 📸</span>
                 </button>
               </div>
             </div>
@@ -949,6 +993,38 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
           onClose={() => setIsShareModalOpen(false)}
           item={item}
         />
+      )}
+
+      {/* Edit Store Menu Modal */}
+      {showMenuEditor && (
+        <EditStoreMenuModal
+          isOpen={showMenuEditor}
+          onClose={() => setShowMenuEditor(false)}
+          item={item}
+          onSave={handleSaveMenu}
+        />
+      )}
+
+      {/* Menu Image Zoom Lightbox */}
+      {zoomImageUrl && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setZoomImageUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setZoomImageUrl(null)}
+            className="absolute top-4 left-4 p-2.5 rounded-full bg-white/10 hover:bg-white/25 text-white transition-colors cursor-pointer"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={zoomImageUrl}
+            alt={`صورة منيو ${item.name}`}
+            className="max-h-[88vh] max-w-full object-contain rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );

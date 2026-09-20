@@ -1,11 +1,61 @@
 import { CityNews } from '../types/directory';
 import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
+import { COMPREHENSIVE_IRAQ_NEWS } from '../data/iraqNewsData';
+import { CITY_NEWS_DATA } from '../data/shatrahData';
 
 export interface LiveNewsOptions {
   governorateId?: string;
   districtName?: string;
   forceRefresh?: boolean;
   limit?: number;
+}
+
+export function normalizeGovId(id?: string): string {
+  if (!id) return '';
+  const s = id.toLowerCase().trim();
+  if (s === 'babylon') return 'babil';
+  if (s === 'qadisiyyah') return 'qadisiyah';
+  if (s === 'saladin') return 'salah-al-din';
+  return s;
+}
+
+export function matchesDistrict(item: CityNews, districtName: string): boolean {
+  const clean = districtName.replace(/^(قضاء|ناحية)\s+/, '').trim().toLowerCase();
+  if (!clean) return false;
+
+  if (item.districtId) {
+    const distId = item.districtId.toLowerCase();
+    if (distId === clean || distId.includes(clean) || clean.includes(distId)) return true;
+    if (clean.includes('شطر') && distId.includes('shatrah')) return true;
+    if (clean.includes('ناصر') && distId.includes('nasiriyah')) return true;
+    if (clean.includes('رفاع') && distId.includes('rifai')) return true;
+    if (clean.includes('سوق') && distId.includes('suq')) return true;
+    if (clean.includes('جبا') && distId.includes('chibayish')) return true;
+    if (clean.includes('غراف') && distId.includes('gharraf')) return true;
+    if (clean.includes('سكر') && distId.includes('sukkar')) return true;
+    if (clean.includes('منصور') && distId.includes('mansour')) return true;
+    if (clean.includes('كراد') && distId.includes('karrada')) return true;
+    if (clean.includes('كاظم') && distId.includes('kadhimiya')) return true;
+    if (clean.includes('رصاف') && distId.includes('rusafa')) return true;
+    if (clean.includes('كرخ') && distId.includes('karkh')) return true;
+  }
+
+  const text = `${item.title} ${item.summary}`.toLowerCase();
+  return text.includes(clean);
+}
+
+export function matchesGovernorate(item: CityNews, govId?: string): boolean {
+  if (!govId || govId === 'all') return true;
+  const targetNorm = normalizeGovId(govId);
+  if (item.governorateId && normalizeGovId(item.governorateId) === targetNorm) {
+    return true;
+  }
+  const conf = GOV_KEYWORDS[targetNorm] || GOV_KEYWORDS[govId];
+  if (conf) {
+    const text = `${item.title} ${item.summary}`;
+    return conf.keywords.some((kw) => text.includes(kw));
+  }
+  return false;
 }
 
 function generateNewsId(title: string, link: string, index: number): string {
@@ -106,6 +156,11 @@ const GOV_KEYWORDS: Record<string, { name: string; keywords: string[]; queryTerm
     queryTerm: '("نينوى" OR "الموصل")',
   },
 };
+
+// Aliases for governorate IDs
+GOV_KEYWORDS['babil'] = GOV_KEYWORDS['babylon'];
+GOV_KEYWORDS['qadisiyah'] = GOV_KEYWORDS['qadisiyyah'];
+GOV_KEYWORDS['salah-al-din'] = GOV_KEYWORDS['saladin'];
 
 // Curated high-res imagery for category previews
 const CATEGORY_IMAGES: Record<string, string[]> = {
@@ -386,17 +441,27 @@ function parseRssXml(xml: string, preferredGovId?: string, defaultSource?: strin
 
 /**
  * Main function to fetch live Iraq news from trusted sources
+ * Strictly scopes results:
+ * - When districtName is provided: ONLY returns news of that specific district
+ * - When governorateId is provided (without district): ONLY returns news of that governorate
+ * - When neither (main page / all Iraq): returns national Iraq-wide news
  */
 export async function getLiveIraqNews(options: LiveNewsOptions = {}): Promise<CityNews[]> {
   const { governorateId, districtName, forceRefresh = false, limit = 50 } = options;
   const cleanDistrict = districtName && districtName !== 'الكل' ? districtName.replace(/^(قضاء|ناحية)\s+/, '').trim() : '';
-  const cacheKey = cleanDistrict
-    ? `dist_${governorateId || 'any'}_${cleanDistrict}`
-    : governorateId && governorateId !== 'all'
-    ? `gov_${governorateId}`
+  const normGovId = normalizeGovId(governorateId);
+
+  const isDistrict = Boolean(cleanDistrict);
+  const isGovernorate = !isDistrict && Boolean(normGovId && normGovId !== 'all');
+  const isAllIraq = !isDistrict && !isGovernorate;
+
+  const cacheKey = isDistrict
+    ? `dist_${normGovId || 'any'}_${cleanDistrict}`
+    : isGovernorate
+    ? `gov_${normGovId}`
     : 'all_iraq';
 
-  // Check cache unless force refresh requested (TTL: 10 minutes)
+  // Check cache unless force refresh requested (TTL: 15 minutes)
   if (!forceRefresh) {
     const cached = newsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
@@ -406,59 +471,51 @@ export async function getLiveIraqNews(options: LiveNewsOptions = {}): Promise<Ci
 
   const feedTasks: { url: string; defaultSource: string; preferredGovId?: string; isDistrict?: boolean }[] = [];
 
-  // 1. If targeted district requested, fetch district-specific search
-  if (cleanDistrict) {
+  if (isDistrict) {
+    // 1. District Mode: query ONLY for this specific district
     feedTasks.push({
       url: `https://news.google.com/rss/search?q=${encodeURIComponent(`"${cleanDistrict}" العراق`)}&hl=ar&gl=AE&ceid=AE:ar`,
-      defaultSource: 'أخبار الأقضية',
-      preferredGovId: governorateId,
+      defaultSource: `أخبار ${cleanDistrict}`,
+      preferredGovId: normGovId,
       isDistrict: true,
     });
-  }
-
-  // 2. If targeted governorate requested, fetch governorate-specific search
-  if (governorateId && governorateId !== 'all' && GOV_KEYWORDS[governorateId]) {
-    const govConf = GOV_KEYWORDS[governorateId];
+  } else if (isGovernorate) {
+    // 2. Governorate Mode: query ONLY for this specific governorate
+    const govConf = GOV_KEYWORDS[normGovId];
+    if (govConf) {
+      feedTasks.push({
+        url: `https://news.google.com/rss/search?q=${encodeURIComponent(`${govConf.queryTerm} العراق`)}&hl=ar&gl=AE&ceid=AE:ar`,
+        defaultSource: `أخبار ${govConf.name}`,
+        preferredGovId: normGovId,
+      });
+    }
+  } else {
+    // 3. All Iraq Mode: Main page national news feeds
     feedTasks.push({
-      url: `https://news.google.com/rss/search?q=${encodeURIComponent(`${govConf.queryTerm} العراق`)}&hl=ar&gl=AE&ceid=AE:ar`,
-      defaultSource: 'مراسلين المحافظات',
-      preferredGovId: governorateId,
+      url: 'https://ina.iq/rss.xml',
+      defaultSource: 'وكالة الأنباء العراقية (واع)',
+    });
+    feedTasks.push({
+      url: 'https://news.google.com/rss/search?q=site:ina.iq&hl=ar&gl=AE&ceid=AE:ar',
+      defaultSource: 'وكالة الأنباء العراقية (واع)',
+    });
+    feedTasks.push({
+      url: 'https://news.google.com/rss/search?q=site:alsumaria.tv&hl=ar&gl=AE&ceid=AE:ar',
+      defaultSource: 'السومرية نيوز',
+    });
+    feedTasks.push({
+      url: 'https://news.google.com/rss/search?q=site:shafaq.com&hl=ar&gl=AE&ceid=AE:ar',
+      defaultSource: 'شفق نيوز',
+    });
+    feedTasks.push({
+      url: 'https://news.google.com/rss/search?q=site:baghdadtoday.news&hl=ar&gl=AE&ceid=AE:ar',
+      defaultSource: 'بغداد اليوم',
+    });
+    feedTasks.push({
+      url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B9%D8%B1%D8%A7%D9%82&hl=ar&gl=AE&ceid=AE:ar',
+      defaultSource: 'وكالات الأنباء العراقية',
     });
   }
-
-  // 3. Trusted Source 1: وكالة الأنباء العراقية الرسمية (واع - INA)
-  feedTasks.push({
-    url: 'https://ina.iq/rss.xml',
-    defaultSource: 'وكالة الأنباء العراقية (واع)',
-  });
-  feedTasks.push({
-    url: 'https://news.google.com/rss/search?q=site:ina.iq&hl=ar&gl=AE&ceid=AE:ar',
-    defaultSource: 'وكالة الأنباء العراقية (واع)',
-  });
-
-  // 4. Trusted Source 2: السومرية نيوز (Alsumaria News)
-  feedTasks.push({
-    url: 'https://news.google.com/rss/search?q=site:alsumaria.tv&hl=ar&gl=AE&ceid=AE:ar',
-    defaultSource: 'السومرية نيوز',
-  });
-
-  // 5. Trusted Source 3: شفق نيوز (Shafaq News)
-  feedTasks.push({
-    url: 'https://news.google.com/rss/search?q=site:shafaq.com&hl=ar&gl=AE&ceid=AE:ar',
-    defaultSource: 'شفق نيوز',
-  });
-
-  // 6. Trusted Source 4: بغداد اليوم (Baghdad Today)
-  feedTasks.push({
-    url: 'https://news.google.com/rss/search?q=site:baghdadtoday.news&hl=ar&gl=AE&ceid=AE:ar',
-    defaultSource: 'بغداد اليوم',
-  });
-
-  // 7. General Iraqi breaking headlines
-  feedTasks.push({
-    url: 'https://news.google.com/rss/search?q=%D8%A7%D9%84%D8%B9%D8%B1%D8%A7%D9%82&hl=ar&gl=AE&ceid=AE:ar',
-    defaultSource: 'وكالات الأنباء العراقية',
-  });
 
   // Fetch all configured feeds concurrently in parallel
   const results = await Promise.allSettled(
@@ -477,23 +534,45 @@ export async function getLiveIraqNews(options: LiveNewsOptions = {}): Promise<Ci
 
   for (const res of results) {
     if (res.status === 'fulfilled') {
-      const { articles, task } = res.value;
+      const { articles } = res.value;
       for (const item of articles) {
+        // Strict boundary enforcement:
+        if (isDistrict) {
+          if (!matchesDistrict(item, cleanDistrict)) continue;
+          item.districtId = cleanDistrict;
+          if (normGovId) item.governorateId = normGovId;
+        } else if (isGovernorate) {
+          if (!matchesGovernorate(item, normGovId)) continue;
+          item.governorateId = normGovId;
+        }
+
         const normTitle = item.title.trim().toLowerCase();
         if (!seenTitles.has(normTitle) && !seenIds.has(item.id)) {
           seenTitles.add(normTitle);
           seenIds.add(item.id);
-
-          if (task.isDistrict && cleanDistrict) {
-            item.districtId = cleanDistrict;
-            if (!item.governorateId && governorateId) {
-              item.governorateId = governorateId;
-            }
-          }
-
           newsList.push(item);
         }
       }
+    }
+  }
+
+  // Merge matching local curated news (high authenticity for Iraqi districts & governorates)
+  const allCurated: CityNews[] = [...COMPREHENSIVE_IRAQ_NEWS, ...CITY_NEWS_DATA];
+  for (const curItem of allCurated) {
+    if (isDistrict) {
+      if (!matchesDistrict(curItem, cleanDistrict)) continue;
+    } else if (isGovernorate) {
+      if (!matchesGovernorate(curItem, normGovId)) continue;
+    }
+
+    const normTitle = curItem.title.trim().toLowerCase();
+    if (!seenTitles.has(normTitle) && !seenIds.has(curItem.id)) {
+      seenTitles.add(normTitle);
+      seenIds.add(curItem.id);
+      newsList.push({
+        ...curItem,
+        timestamp: Date.now() - 1000 * 60 * 60 * 6,
+      });
     }
   }
 
@@ -518,55 +597,7 @@ export async function getLiveIraqNews(options: LiveNewsOptions = {}): Promise<Ci
     return existing.data.slice(0, limit);
   }
 
-  // Fallback: Multi-source curated real headlines
-  const nowFormatted = formatArabicRelativeDate(new Date().toISOString()).text;
-  return [
-    {
-      id: 'dynamic-fb-1',
-      title: 'إطلاق حزمة مشاريع جديدة لتطوير الخدمات البلدية والجسور في عموم المحافظات',
-      summary: 'وزارة الإعمار والإسكان والبلديات العامة تعلن إنجاز وتدشين مشاريع فك الاختناقات المرورية وتأهيل شبكات المياه والكهرباء بالمحافظات.',
-      date: nowFormatted,
-      category: 'بلدية وخدمات',
-      governorateId: governorateId || 'baghdad',
-      source: 'وكالة الأنباء العراقية (واع)',
-      readTime: 'دقيقتان',
-      imageUrl: CATEGORY_IMAGES['بلدية وخدمات'][0],
-      isUrgent: true,
-    },
-    {
-      id: 'dynamic-fb-2',
-      title: 'استقرار أسعار السلع الأساسية والمواد الغذائية في الأسواق المحلية العراقية',
-      summary: 'غرف التجارة والجهات الرقابية تؤكد توفر الخزين الغذائي ومواصلة فتح منافذ البيع المباشر بأسعار مدعومة في كافة الأقضية والنواحي.',
-      date: nowFormatted,
-      category: 'اقتصاد وتجارة',
-      governorateId: governorateId || 'basra',
-      source: 'السومرية نيوز',
-      readTime: 'دقيقتان',
-      imageUrl: CATEGORY_IMAGES['اقتصاد وتجارة'][0],
-    },
-    {
-      id: 'dynamic-fb-3',
-      title: 'حملات أمنية واستباقية لتعزيز الاستقرار وحماية المنشآت الحيوية في المحافظات',
-      summary: 'قيادات العمليات المشتركة تؤكد نجاح العمليات التفتيشية ونشر نقاط المراقبة لضمان أمن المواطنين والأسواق.',
-      date: nowFormatted,
-      category: 'أمن ومرور',
-      governorateId: governorateId || 'maysan',
-      source: 'شفق نيوز',
-      readTime: 'دقيقتان',
-      imageUrl: CATEGORY_IMAGES['أمن ومرور'][0],
-    },
-    {
-      id: 'dynamic-fb-4',
-      title: 'الأنواء الجوية: طقس صحو مع استقرار درجات الحرارة في عموم مدن ومحافظات العراق',
-      summary: 'الهيئة العامة للأنواء الجوية والرصد الزلزالي تصدر تقريرها اليومي لحالة الطقس ودرجات الحرارة المتوقعة في عموم مدن العراق.',
-      date: nowFormatted,
-      category: 'صحة وبيئة',
-      governorateId: governorateId || 'dhi-qar',
-      source: 'بغداد اليوم',
-      readTime: 'دقيقة واحدة',
-      imageUrl: CATEGORY_IMAGES['صحة وبيئة'][0],
-    },
-  ];
+  return [];
 }
 
 // Alias export for compatibility
