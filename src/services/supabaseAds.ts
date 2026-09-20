@@ -1,4 +1,5 @@
 import { ensureSupabaseClient, getIsSupabaseConfigured } from '../lib/supabase';
+import { apiFetch } from '../utils/apiClient';
 
 export interface Advertisement {
   id: string;
@@ -46,7 +47,7 @@ export async function fetchAdsFromSupabase(position = 'home_banner'): Promise<Ad
       }
     }
 
-    const res = await fetch(`/api/advertisements?position=${encodeURIComponent(position)}`);
+    const res = await apiFetch(`/api/advertisements?position=${encodeURIComponent(position)}`);
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.advertisements)) {

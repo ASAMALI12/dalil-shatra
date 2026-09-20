@@ -263,14 +263,22 @@ export function mapSupabaseStoreToDirectoryItem(row: Record<string, any>): Direc
     tags = [category, name];
   }
 
-  // Numerical & Boolean values
-  const rating = typeof row.rating === 'number' ? row.rating : parseFloat(row.rating) || 4.8;
-  const reviewsCount =
+  // Numerical & Boolean values (Clean & Genuine: No fake ratings or inflated review counts)
+  const parsedRating =
+    typeof row.rating === 'number'
+      ? row.rating
+      : row.rating !== undefined && row.rating !== null && row.rating !== ''
+      ? parseFloat(row.rating)
+      : null;
+  const rating = parsedRating !== null && !isNaN(parsedRating) && parsedRating > 0 ? Number(parsedRating.toFixed(1)) : null;
+
+  const rawReviewsCount =
     typeof row.reviews_count === 'number'
       ? row.reviews_count
       : typeof row.reviewsCount === 'number'
       ? row.reviewsCount
-      : parseInt(row.reviews_count || row.reviewsCount || '14', 10) || 14;
+      : row.reviews_count || row.reviewsCount;
+  const reviewsCount = rawReviewsCount ? parseInt(String(rawReviewsCount), 10) || 0 : 0;
 
   const isOpen =
     typeof row.is_open === 'boolean'

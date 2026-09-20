@@ -1,5 +1,6 @@
 import { supabase, ensureSupabaseClient, getIsSupabaseConfigured } from '../lib/supabase';
 import { Offer } from '../types/directory';
+import { apiFetch } from '../utils/apiClient';
 
 export interface SupabaseOfferRow {
   id: string;
@@ -72,7 +73,7 @@ export async function fetchOffersFromSupabase(params?: {
     if (params?.districtId) searchParams.append('districtId', params.districtId);
     if (params?.category) searchParams.append('category', params.category);
 
-    const res = await fetch(`/api/offers?${searchParams.toString()}`);
+    const res = await apiFetch(`/api/offers?${searchParams.toString()}`);
     if (res.ok) {
       const json = await res.json();
       if (json.success && Array.isArray(json.offers)) {
@@ -111,7 +112,7 @@ export async function submitStoreOffer(offerData: {
   error?: string;
 }> {
   try {
-    const res = await fetch('/api/offers', {
+    const res = await apiFetch('/api/offers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(offerData),

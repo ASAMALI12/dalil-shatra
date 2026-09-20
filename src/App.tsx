@@ -700,8 +700,8 @@ function IraqDirectoryApp() {
         phone: offer.phone || '07801552399',
         whatsapp: (offer as any).whatsapp || (offer.phone ? `964${offer.phone.replace(/^0/, '')}` : '9647801552399'),
         address: `${currentLocation.governorateName} - ${currentLocation.districtName}`,
-        rating: 4.9,
-        reviewsCount: 88,
+        rating: null,
+        reviewsCount: 0,
         isOpen: true,
         workingHours: '09:00 ص - 11:00 م',
         imageUrl: offer.imageUrl,
@@ -750,8 +750,8 @@ function IraqDirectoryApp() {
         address: notif.districtName
           ? `${notif.governorateName || 'العراق'} - ${notif.districtName}`
           : notif.governorateName || 'العراق',
-        rating: 5.0,
-        reviewsCount: 1,
+        rating: null,
+        reviewsCount: 0,
         isOpen: true,
         workingHours: '09:00 ص - 11:00 م',
         imageUrl:

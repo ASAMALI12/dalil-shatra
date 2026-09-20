@@ -36,6 +36,7 @@ import { useDirectory } from '../context/DirectoryContext';
 import { StoreShareModal } from './StoreShareModal';
 import { StoreLocationMap } from './StoreLocationMap';
 import { StoreMenuSection } from './StoreMenuSection';
+import { StoreReviewsSection } from './StoreReviewsSection';
 import { EditStoreMenuModal } from './EditStoreMenuModal';
 import {
   formatTikTokUrl,
@@ -347,11 +348,18 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
                   <span className="rounded-lg bg-sky-600/90 backdrop-blur-md text-white px-2 py-0.5 text-[10px] font-extrabold">
                     {item.subCategory || item.category || 'متجر معتمد'}
                   </span>
-                  <div className="inline-flex items-center gap-1 rounded-lg bg-amber-400 text-slate-950 px-2 py-0.5 text-[10px] font-black shadow-2xs">
-                    <Star className="h-3 w-3 fill-slate-950 text-slate-950" />
-                    <span>{item.rating ? item.rating.toFixed(1) : '5.0'}</span>
-                    <span className="opacity-75 font-normal text-[9px]">({item.reviewsCount || 1})</span>
-                  </div>
+                  {item.rating && (item.reviewsCount || 0) > 0 ? (
+                    <div className="inline-flex items-center gap-1 rounded-lg bg-amber-400 text-slate-950 px-2 py-0.5 text-[10px] font-black shadow-2xs">
+                      <Star className="h-3 w-3 fill-slate-950 text-slate-950" />
+                      <span>{item.rating.toFixed(1)}</span>
+                      <span className="opacity-75 font-normal text-[9px]">({item.reviewsCount})</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1 rounded-lg bg-slate-900/80 backdrop-blur-md text-slate-200 px-2 py-0.5 text-[10px] font-bold shadow-2xs">
+                      <span>جديد</span>
+                      <span className="opacity-75 text-[9px]">(بدون تقييم)</span>
+                    </div>
+                  )}
                 </div>
 
                 <h2 className="font-display text-lg sm:text-xl font-black text-white drop-shadow-sm">
@@ -637,6 +645,11 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
             isOwner={isOwner}
             onOpenEditLocation={() => onEditStore?.(currentStore)}
           />
+
+          {/* =========================================================================
+              STORE REVIEWS & 5-STAR RATINGS (التقييمات الحقيقية 5 نجوم)
+              ========================================================================= */}
+          <StoreReviewsSection item={currentStore} />
 
           {/* =========================================================================
               STORE OWNER CONTROLS (إدارة وتعديل المتجر لمالكه الموثق)

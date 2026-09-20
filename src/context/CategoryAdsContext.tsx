@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { CategoryAd } from '../types/shatrah';
 import { supabase, getIsSupabaseConfigured } from '../lib/supabase';
+import { apiFetch } from '../utils/apiClient';
 
 interface CategoryAdsContextType {
   ads: CategoryAd[];
@@ -77,7 +78,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         }
       }
 
-      const res = await fetch('/api/advertisements');
+      const res = await apiFetch('/api/advertisements');
       const json = await res.json();
       if (json.success && Array.isArray(json.ads)) {
         const mappedAds: CategoryAd[] = json.ads.map((d: any) => ({

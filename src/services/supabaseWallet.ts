@@ -58,7 +58,14 @@ export async function fetchWalletFromSupabase(): Promise<{
     }
 
     // Fallback to server API
-    const res = await fetch(getApiUrl('/api/wallet'));
+    const adminToken = typeof window !== 'undefined' ? sessionStorage.getItem('iraq_admin_token') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (adminToken) {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+      headers['x-admin-token'] = adminToken;
+    }
+
+    const res = await fetch(getApiUrl('/api/wallet'), { headers });
     if (res.ok) {
       const data = await res.json();
       if (data.success) {
@@ -92,9 +99,16 @@ export async function addTransactionToSupabase(tx: {
   referenceNumber?: string;
 }): Promise<{ success: boolean; balance?: number; error?: any }> {
   try {
+    const adminToken = typeof window !== 'undefined' ? sessionStorage.getItem('iraq_admin_token') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (adminToken) {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+      headers['x-admin-token'] = adminToken;
+    }
+
     const res = await fetch(getApiUrl('/api/wallet/transaction'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         walletId: tx.walletId || 'main_wallet',
         userId: tx.userId || 'admin',

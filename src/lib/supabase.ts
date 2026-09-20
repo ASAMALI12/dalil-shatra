@@ -1,7 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { getApiUrl } from '../utils/apiClient';
 
-// Default project configuration
-export const DEFAULT_SUPABASE_URL = 'https://kcrzmkrytjndeyzzoggw.supabase.co';
+// Default project configuration (Single Source of Truth: ccvntqtohuxqpxfqnhxt)
+export const DEFAULT_SUPABASE_URL = 'https://ccvntqtohuxqpxfqnhxt.supabase.co';
 
 const getEnvVar = (key: string): string => {
   try {
@@ -84,7 +85,8 @@ export async function ensureSupabaseClient(): Promise<SupabaseClient> {
   }
 
   try {
-    const res = await fetch('/api/supabase-config');
+    const configUrl = getApiUrl('/supabase-config');
+    const res = await fetch(configUrl);
     if (res.ok) {
       const data = await res.json();
       if (data.supabaseUrl) {
@@ -98,7 +100,7 @@ export async function ensureSupabaseClient(): Promise<SupabaseClient> {
         }
         supabase = createClient(currentUrl, currentAnonKey);
         isSupabaseConfigured = true;
-        console.log('✅ Supabase client initialized with credentials from /api/supabase-config');
+        console.log('✅ Supabase client initialized with credentials from API config');
       }
     }
   } catch (err) {

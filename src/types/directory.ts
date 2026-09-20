@@ -10,8 +10,8 @@ export interface DirectoryItem {
   districtId?: string;
   governorateName?: string;
   districtName?: string;
-  rating: number;
-  reviewsCount: number;
+  rating?: number | null;
+  reviewsCount?: number;
   isOpen: boolean;
   workingHours: string;
   imageUrl: string;

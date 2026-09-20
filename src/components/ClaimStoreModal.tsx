@@ -20,6 +20,7 @@ import confetti from 'canvas-confetti';
 import { useDirectory } from '../context/DirectoryContext';
 import { useNotification } from '../context/NotificationContext';
 import { DirectoryItem } from '../types/shatrah';
+import { apiFetch } from '../utils/apiClient';
 
 interface ClaimStoreModalProps {
   store?: DirectoryItem | null;
@@ -111,7 +112,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
 
     // Call backend OTP generation endpoint
     setIsSendingOtp(true);
-    fetch('/api/claim/request-otp', {
+    apiFetch('/api/claim/request-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -145,7 +146,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
   const handleResendOtp = () => {
     if (resendTimer > 0) return;
     setIsSendingOtp(true);
-    fetch('/api/claim/request-otp', {
+    apiFetch('/api/claim/request-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -187,7 +188,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
     let resultData: any = null;
 
     try {
-      const resp = await fetch('/api/claim/verify-otp', {
+      const resp = await apiFetch('/api/claim/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

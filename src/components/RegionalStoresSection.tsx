@@ -172,10 +172,19 @@ export const RegionalStoresSection: React.FC<RegionalStoresSectionProps> = ({
                 </div>
 
                 {/* Restaurant / Store Name - Prominent & Beautiful */}
-                <div className="flex-1 min-w-0 pr-1">
+                <div className="flex-1 min-w-0 pr-1 space-y-1">
                   <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors leading-snug line-clamp-2">
                     {item.name}
                   </h4>
+                  {item.rating && (item.reviewsCount || 0) > 0 ? (
+                    <div className="flex items-center gap-1 text-[11px] font-bold text-amber-600">
+                      <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                      <span>{item.rating.toFixed(1)}</span>
+                      <span className="text-slate-400 font-normal">({item.reviewsCount})</span>
+                    </div>
+                  ) : (
+                    <span className="inline-block text-[10px] text-slate-400 font-medium">جديد (بدون تقييم)</span>
+                  )}
                 </div>
 
                 {/* Left Arrow Icon indicating click to open store profile */}

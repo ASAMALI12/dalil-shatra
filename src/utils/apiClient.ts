@@ -3,12 +3,13 @@
  * Handles cross-platform URL resolution (Web, Capacitor Android APK, Custom Host)
  */
 
+export const DEFAULT_API_URL = 'https://ccvntqtohuxqpxfqnhxt.supabase.co/functions/v1/api';
+
 /**
  * Returns the base API URL depending on the running environment:
  * 1. Explicit environment variable: VITE_API_URL
  * 2. User-configured custom API URL saved in localStorage
- * 3. Capacitor Native Android environment (points to production backend)
- * 4. Browser environment (uses relative URL)
+ * 3. Default production Supabase Edge Function API (Universal for APK and Web)
  */
 export function getApiBaseUrl(): string {
   // 1. Check Vite env variable
@@ -29,33 +30,32 @@ export function getApiBaseUrl(): string {
         return custom.replace(/\/+$/, '');
       }
     } catch {}
-
-    // 3. Detect Capacitor / Android native container
-    const isCapacitor =
-      Boolean((window as any).Capacitor?.isNativePlatform?.()) ||
-      window.location.protocol === 'capacitor:' ||
-      (window.location.hostname === 'localhost' && window.navigator.userAgent.includes('Android'));
-
-    if (isCapacitor) {
-      // In native container, relative paths or empty base allows client services & CapacitorHttp to operate
-      return '';
-    }
   }
 
-  // 4. Default web relative path
-  return '';
+  // 3. Fallback to production Supabase Edge Function
+  return DEFAULT_API_URL;
 }
 
 /**
- * Formats an API path with the appropriate host prefix
+ * Formats an API path with the appropriate host prefix.
+ * Safely normalizes both '/api/endpoint' and '/endpoint' to prevent double '/api/api/'.
  */
 export function getApiUrl(path: string): string {
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path;
   }
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  let cleanPath = path.startsWith('/') ? path : `/${path}`;
   const base = getApiBaseUrl();
-  return base ? `${base}${cleanPath}` : cleanPath;
+
+  if (base) {
+    if (base.endsWith('/api') && cleanPath.startsWith('/api/')) {
+      cleanPath = cleanPath.slice(4);
+    } else if (base.endsWith('/api') && cleanPath === '/api') {
+      cleanPath = '';
+    }
+    return `${base}${cleanPath}`;
+  }
+  return cleanPath;
 }
 
 export interface SafeApiResponse<T = any> {

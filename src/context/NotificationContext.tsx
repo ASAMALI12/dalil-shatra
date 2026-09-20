@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { NotificationItem, Offer, DirectoryItem } from '../types/directory';
 import { doesCategoryMatch, normalizeCategoryId } from '../utils/categoryMatcher';
+import { apiFetch } from '../utils/apiClient';
 
 export interface IraqMainAnnouncement {
   id: string;
@@ -561,7 +562,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       ? `?governorateId=${encodeURIComponent(userLoc.governorateId)}&districtId=${encodeURIComponent(userLoc.districtId || 'all')}`
       : '';
 
-    fetch(`/api/notifications${query}`)
+    apiFetch(`/api/notifications${query}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.notifications) && data.notifications.length > 0) {
@@ -634,7 +635,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       // Server-side broadcast API call
       try {
-        fetch('/api/notifications', {
+        apiFetch('/api/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newNotif),
