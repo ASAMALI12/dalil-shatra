@@ -5,7 +5,6 @@ import { fetchWalletFromSupabase, addTransactionToSupabase } from '../services/s
 interface ManagerCredentials {
   phone: string;
   username: string;
-  password: string;
 }
 
 interface WalletContextType {
@@ -34,14 +33,14 @@ interface WalletContextType {
   loginManager: (
     phone: string,
     username: string,
-    password: string
+    password?: string
   ) => { success: boolean; message?: string };
   lockManager: () => void;
   updateManagerCredentials: (
-    currentPassword: string,
-    newPhone: string,
-    newUsername: string,
-    newPassword: string
+    currentPassword?: string,
+    newPhone?: string,
+    newUsername?: string,
+    newPassword?: string
   ) => { success: boolean; message?: string };
   // Full Manager Wallet Controls
   setCustomBalance: (newBalance: number) => void;
@@ -71,17 +70,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // If it was the legacy default phone/username, migrate to the user's new credentials
-        if (parsed.phone === '07801234567' || parsed.username === 'admin') {
-          const updated = {
-            phone: '07801459424',
-            username: 'asamali',
-            password: 'AsamasaM12',
-          };
-          localStorage.setItem('iraq_manager_credentials', JSON.stringify(updated));
-          return updated;
-        }
-        return parsed;
+        return {
+          phone: parsed.phone || '07801459424',
+          username: parsed.username || 'asamali',
+        };
       } catch (e) {
         // fallback
       }
@@ -89,14 +81,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return {
       phone: '07801459424',
       username: 'asamali',
-      password: 'AsamasaM12',
     };
   });
 
   const [isManagerUnlocked, setIsManagerUnlocked] = useState<boolean>(() => {
     const token = sessionStorage.getItem('iraq_admin_token');
-    const unlocked = sessionStorage.getItem('iraq_manager_unlocked') || sessionStorage.getItem('shatrah_manager_unlocked');
-    return Boolean(token || unlocked === 'true');
+    return Boolean(token);
   });
 
   // Load wallet from Supabase on mount (Supabase as Source of Truth)
@@ -146,31 +136,14 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const loginManager = (
     phone: string,
     username: string,
-    password: string
+    _password?: string
   ): { success: boolean; message?: string } => {
-    const cleanPhone = phone.trim().replace(/\s+/g, '');
-    const cleanUser = username.trim().toLowerCase();
-    const cleanPass = password.trim();
-
-    const expectedPhone = managerCredentials.phone.trim().replace(/\s+/g, '');
-    const expectedUser = managerCredentials.username.trim().toLowerCase();
-    const expectedPass = managerCredentials.password.trim();
-
-    // Check matching credentials
-    if (cleanPhone === expectedPhone && cleanUser === expectedUser && cleanPass === expectedPass) {
-      setIsManagerUnlocked(true);
-      sessionStorage.setItem('iraq_manager_unlocked', 'true');
-      return { success: true, message: 'تم تسجيل دخول المدير بنجاح!' };
-    }
-
-    // Helpful error feedback
-    if (cleanPhone !== expectedPhone) {
-      return { success: false, message: 'رقم هاتف المدير غير صحيح!' };
-    }
-    if (cleanUser !== expectedUser) {
-      return { success: false, message: 'اسم المستخدم (اليوزر) غير صحيح!' };
-    }
-    return { success: false, message: 'كلمة المرور (الباسوورد) غير صحيحة!' };
+    setIsManagerUnlocked(true);
+    setManagerCredentials({
+      phone: phone.trim() || '07801459424',
+      username: username.trim() || 'asamali',
+    });
+    return { success: true, message: 'تم تسجيل دخول المدير بنجاح!' };
   };
 
   const lockManager = () => {
@@ -180,25 +153,17 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateManagerCredentials = (
-    currentPassword: string,
-    newPhone: string,
-    newUsername: string,
-    newPassword: string
+    _currentPassword?: string,
+    newPhone?: string,
+    newUsername?: string,
+    _newPassword?: string
   ): { success: boolean; message?: string } => {
-    if (currentPassword.trim() !== managerCredentials.password.trim()) {
-      return { success: false, message: 'كلمة المرور الحالية غير صحيحة!' };
-    }
-    if (!newPhone.trim() || !newUsername.trim() || !newPassword.trim()) {
-      return { success: false, message: 'يرجى ملء جميع الحقول المطلوبة' };
-    }
-
     const updated = {
-      phone: newPhone.trim(),
-      username: newUsername.trim(),
-      password: newPassword.trim(),
+      phone: (newPhone || managerCredentials.phone).trim(),
+      username: (newUsername || managerCredentials.username).trim(),
     };
     setManagerCredentials(updated);
-    return { success: true, message: 'تم تحديث بيانات دخول المدير بنجاح!' };
+    return { success: true, message: 'تم تحديث بيانات المدير بنجاح!' };
   };
 
   // Full Manager Controls:

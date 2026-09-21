@@ -27,9 +27,8 @@ export const StoreShareModal: React.FC<StoreShareModalProps> = ({
   if (!isOpen) return null;
 
   const currentOrigin = window.location.origin;
-  const currentPath = window.location.pathname;
   // Clean direct store link
-  const shareUrl = `${currentOrigin}${currentPath}?storeId=${encodeURIComponent(item.id)}`;
+  const shareUrl = `${currentOrigin}/store/${encodeURIComponent(item.id)}`;
   const locationInfo = item.governorateName
     ? `${item.governorateName}${item.districtName ? ` - ${item.districtName}` : ''}`
     : item.districtName || 'العراق';

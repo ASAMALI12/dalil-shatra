@@ -674,3 +674,102 @@ export async function seedStoresToSupabase(
     return { success: false, count: 0, error: err };
   }
 }
+
+export interface StoreFilterOptions {
+  searchQuery?: string;
+  category?: string;
+  governorateId?: string;
+  districtId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Performs fast paginated search across stores in Supabase
+ * Searches across name, address, phone, district, and governorate with pagination
+ */
+export async function searchStoresPaginated(options: StoreFilterOptions = {}): Promise<{
+  data: DirectoryItem[];
+  total: number;
+  hasMore: boolean;
+  error?: any;
+}> {
+  const client = await ensureSupabaseClient();
+  if (!getIsSupabaseConfigured()) {
+    return { data: [], total: 0, hasMore: false, error: 'Supabase not configured' };
+  }
+
+  const {
+    searchQuery = '',
+    category,
+    governorateId,
+    districtId,
+    page = 1,
+    pageSize = 20,
+  } = options;
+
+  try {
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    let query = client.from('stores').select('*', { count: 'exact' });
+
+    if (governorateId && governorateId !== 'all') {
+      query = query.eq('governorate_id', governorateId);
+    }
+    if (districtId && districtId !== 'all') {
+      query = query.eq('district_id', districtId);
+    }
+    if (category && category !== 'all') {
+      query = query.eq('category', category);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim();
+      query = query.or(`name.ilike.%${q}%,address.ilike.%${q}%,phone.ilike.%${q}%,district_name.ilike.%${q}%,governorate_name.ilike.%${q}%`);
+    }
+
+    query = query.order('id', { ascending: true }).range(from, to);
+
+    const { data, count, error } = await query;
+    if (error) {
+      console.warn('searchStoresPaginated query error:', error);
+      return { data: [], total: 0, hasMore: false, error };
+    }
+
+    const items = (data || []).map(mapSupabaseStoreToDirectoryItem);
+    const total = count || items.length;
+    return {
+      data: items,
+      total,
+      hasMore: to + 1 < total,
+    };
+  } catch (err) {
+    return { data: [], total: 0, hasMore: false, error: err };
+  }
+}
+
+/**
+ * Fetches a single store by its unique ID directly from Supabase
+ */
+export async function fetchStoreByIdFromSupabase(storeId: string): Promise<DirectoryItem | null> {
+  const client = await ensureSupabaseClient();
+  if (!getIsSupabaseConfigured() || !storeId) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await client
+      .from('stores')
+      .select('*')
+      .eq('id', storeId)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+    return mapSupabaseStoreToDirectoryItem(data);
+  } catch {
+    return null;
+  }
+}
+

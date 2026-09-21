@@ -172,28 +172,18 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
       const data = await resp.json();
       if (resp.ok && data.success && data.token) {
         sessionStorage.setItem('iraq_admin_token', data.token);
-        loginManager(loginPhone, loginUsername, loginPassword);
+        loginManager(loginPhone, loginUsername);
         setLoginPhone('');
         setLoginUsername('');
         setLoginPassword('');
         confetti({ particleCount: 50, spread: 70 });
         return;
-      } else if (!resp.ok) {
+      } else {
         setLoginError(data.error || 'بيانات تسجيل الدخول غير صحيحة.');
         return;
       }
     } catch {
-      // Fall through to local fallback if offline
-    }
-
-    const res = loginManager(loginPhone, loginUsername, loginPassword);
-    if (res.success) {
-      setLoginPhone('');
-      setLoginUsername('');
-      setLoginPassword('');
-      confetti({ particleCount: 50, spread: 70 });
-    } else {
-      setLoginError(res.message || 'بيانات الدخول غير صحيحة!');
+      setLoginError('تعذر الاتصال بخادم الإدارة، يرجى المحاولة لاحقاً.');
     }
   };
 
@@ -350,26 +340,52 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   };
 
   // Handle Update Security Credentials
-  const handleUpdateSecurity = (e: React.FormEvent) => {
+  const handleUpdateSecurity = async (e: React.FormEvent) => {
     e.preventDefault();
     setSecurityErrorMsg('');
     setSecuritySuccessMsg('');
 
-    const res = updateManagerCredentials(
+    if (newPassword && !currPass) {
+      setSecurityErrorMsg('يرجى إدخال كلمة المرور الحالية لتأكيد التغيير.');
+      return;
+    }
+
+    if (newPassword) {
+      try {
+        const token = sessionStorage.getItem('iraq_admin_token');
+        const resp = await safeApiFetch('/api/admin/change-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'x-admin-token': token || '',
+          },
+          body: JSON.stringify({
+            currentPassword: currPass,
+            newPassword: newPassword,
+          }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.success) {
+          setSecurityErrorMsg(data.error || 'فشل تغيير كلمة المرور. تأكد من كلمة المرور الحالية.');
+          return;
+        }
+      } catch {
+        setSecurityErrorMsg('تعذر الاتصال بالخادم لتحديث كلمة المرور.');
+        return;
+      }
+    }
+
+    updateManagerCredentials(
       currPass,
       newPhone || managerCredentials.phone,
-      newUsername || managerCredentials.username,
-      newPassword || managerCredentials.password
+      newUsername || managerCredentials.username
     );
 
-    if (res.success) {
-      setSecuritySuccessMsg(res.message || 'تم تحديث بيانات الدخول بنجاح!');
-      setCurrPass('');
-      setNewPassword('');
-      setTimeout(() => setSecuritySuccessMsg(''), 4000);
-    } else {
-      setSecurityErrorMsg(res.message || 'فشل التحديث، تأكد من كلمة المرور الحالية');
-    }
+    setSecuritySuccessMsg('تم تحديث بيانات الدخول بنجاح!');
+    setCurrPass('');
+    setNewPassword('');
+    setTimeout(() => setSecuritySuccessMsg(''), 4000);
   };
 
   return (

@@ -22,6 +22,7 @@ import {
 import confetti from 'canvas-confetti';
 import { useWallet } from '../context/WalletContext';
 import { WalletTransaction, PaymentMethod } from '../types/shatrah';
+import { safeApiFetch } from '../utils/apiClient';
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -80,17 +81,33 @@ export const WalletModal: React.FC<WalletModalProps> = ({
   if (!isOpen) return null;
 
   // Handle Manager Login Unlock
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setManagerLoginError('');
-    const res = loginManager(managerPhoneInput, managerUserInput, managerPassInput);
-    if (res.success) {
-      setManagerLoginError('');
-      setManagerPhoneInput('');
-      setManagerUserInput('');
-      setManagerPassInput('');
-    } else {
-      setManagerLoginError(res.message || 'بيانات الدخول غير صحيحة!');
+
+    try {
+      const resp = await safeApiFetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: managerPhoneInput.trim(),
+          username: managerUserInput.trim(),
+          password: managerPassInput.trim(),
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.ok && data.success && data.token) {
+        sessionStorage.setItem('iraq_admin_token', data.token);
+        loginManager(managerPhoneInput, managerUserInput);
+        setManagerLoginError('');
+        setManagerPhoneInput('');
+        setManagerUserInput('');
+        setManagerPassInput('');
+        return;
+      }
+      setManagerLoginError(data.error || 'بيانات الدخول غير صحيحة!');
+    } catch {
+      setManagerLoginError('تعذر الاتصال بخادم التحقق من هوية المدير.');
     }
   };
 

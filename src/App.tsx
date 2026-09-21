@@ -27,6 +27,7 @@ import { DirectoryProvider, useDirectory } from './context/DirectoryContext';
 import { CategoryAdsProvider } from './context/CategoryAdsContext';
 import { DirectoryItem, Offer, NotificationItem } from './types/shatrah';
 import { IRAQ_GOVERNORATES, getGovernorate } from './data/iraqLocations';
+import { fetchStoreByIdFromSupabase } from './services/supabaseStores';
 import { CIRCULAR_CATEGORIES } from './components/StoresCircularView';
 import {
   Bell,
@@ -638,35 +639,87 @@ function IraqDirectoryApp() {
     }
   }, [detectGPSLocation, navigateToDirectLocation]);
 
-  // Deep linking: open shared store directly if ?storeId=... is in the URL
+  // Deep linking: open shared store directly if ?storeId=... or /store/:id or #/store/:id or appUrlOpen is in the URL
   useEffect(() => {
+    let isCancelled = false;
+
+    const handleOpenStoreById = async (storeId: string) => {
+      if (!storeId || isCancelled) return;
+
+      let found = items.find((i) => i.id === storeId);
+      if (!found) {
+        // Fetch on-demand from Supabase
+        const fetched = await fetchStoreByIdFromSupabase(storeId);
+        if (fetched && !isCancelled) {
+          found = fetched;
+        }
+      }
+
+      if (found && !isCancelled) {
+        const govId = found.governorateId || IRAQ_GOVERNORATES[0].id;
+        const distId = found.districtId || 'all';
+        const distName = found.districtName || 'الكل';
+
+        try {
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({ level: 'governorates' }, '', cleanUrl);
+          window.history.pushState({ level: 'districts', govId }, '');
+          window.history.pushState({ level: 'stores', govId, distId }, '');
+          window.history.pushState({ modal: 'item', id: found.id }, '');
+        } catch (e) {}
+
+        setSelectedGovernorateId(govId);
+        setSelectedDistrictId(distId);
+        setSelectedDistrictName(distName);
+        setSelectedItem(found);
+        setNavLevel('stores');
+        setActiveTab('home');
+      }
+    };
+
+    // 1. Check URL search param (?storeId=...)
     try {
       const urlParams = new URLSearchParams(window.location.search);
-      const storeId = urlParams.get('storeId');
-      if (storeId && items.length > 0) {
-        const found = items.find((i) => i.id === storeId);
-        if (found) {
-          const govId = found.governorateId || IRAQ_GOVERNORATES[0].id;
-          const distId = found.districtId || 'all';
-          const distName = found.districtName || 'الكل';
-
-          try {
-            const cleanUrl = window.location.pathname;
-            window.history.replaceState({ level: 'governorates' }, '', cleanUrl);
-            window.history.pushState({ level: 'districts', govId }, '');
-            window.history.pushState({ level: 'stores', govId, distId }, '');
-            window.history.pushState({ modal: 'item', id: found.id }, '');
-          } catch (e) {}
-
-          setSelectedGovernorateId(govId);
-          setSelectedDistrictId(distId);
-          setSelectedDistrictName(distName);
-          setSelectedItem(found);
-          setNavLevel('stores');
-          setActiveTab('home');
+      const paramStoreId = urlParams.get('storeId');
+      if (paramStoreId) {
+        handleOpenStoreById(paramStoreId);
+      } else {
+        // 2. Check path /store/:id
+        const pathMatch = window.location.pathname.match(/\/store\/([^/?#]+)/i);
+        if (pathMatch && pathMatch[1]) {
+          handleOpenStoreById(decodeURIComponent(pathMatch[1]));
+        } else {
+          // 3. Check hash #/store/:id
+          const hashMatch = window.location.hash.match(/#\/?store\/([^/?#]+)/i);
+          if (hashMatch && hashMatch[1]) {
+            handleOpenStoreById(decodeURIComponent(hashMatch[1]));
+          }
         }
       }
     } catch (e) {}
+
+    // 4. Capacitor App URL Open listener
+    let urlListener: any;
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener('appUrlOpen', (event) => {
+        try {
+          const url = new URL(event.url);
+          const storeId = url.searchParams.get('storeId') || url.pathname.match(/\/store\/([^/?#]+)/i)?.[1];
+          if (storeId) {
+            handleOpenStoreById(decodeURIComponent(storeId));
+          }
+        } catch (e) {}
+      }).then((listener) => {
+        urlListener = listener;
+      });
+    }
+
+    return () => {
+      isCancelled = true;
+      if (urlListener && typeof urlListener.remove === 'function') {
+        urlListener.remove();
+      }
+    };
   }, [items]);
 
   const canGoBack = Boolean(
