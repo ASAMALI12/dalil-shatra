@@ -266,6 +266,16 @@ ALTER TABLE IF EXISTS public.news ADD COLUMN IF NOT EXISTS summary TEXT;
 ALTER TABLE IF EXISTS public.news ADD COLUMN IF NOT EXISTS link TEXT;
 ALTER TABLE IF EXISTS public.news ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'دليل العراق';
 
+-- 13. PROFILES (ملفات المستخدمين مع التحقق من الهوية)
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  phone TEXT,
+  full_name TEXT,
+  role TEXT DEFAULT 'user' CHECK (role IN ('user', 'store_owner', 'admin')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- =====================================================================
 -- الفهارس (Indexes)
 -- =====================================================================
@@ -296,6 +306,7 @@ ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.news ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Clean existing policies for idempotence
 DROP POLICY IF EXISTS "Public Read Stores" ON public.stores;
@@ -377,3 +388,12 @@ CREATE POLICY "Service Role Full Access Transactions" ON public.transactions FOR
 CREATE POLICY "Service Role Full Access Claims" ON public.store_claims FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service Role Full Access OTP" ON public.otp_verifications FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service Role Full Access Limits" ON public.offer_notification_limits FOR ALL USING (auth.role() = 'service_role');
+
+-- 9. PROFILES: Users can read and update only their own profile, service_role has full access
+DROP POLICY IF EXISTS "Users can read own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Service Role Full Access Profiles" ON public.profiles;
+
+CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Service Role Full Access Profiles" ON public.profiles FOR ALL USING (auth.role() = 'service_role');

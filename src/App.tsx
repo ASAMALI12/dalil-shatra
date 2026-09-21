@@ -1135,10 +1135,6 @@ function IraqDirectoryApp() {
           setIsManagerDashboardOpen(false);
           handleOpenStore(store);
         }}
-        onOpenWalletModal={() => {
-          setIsManagerDashboardOpen(false);
-          setIsWalletModalOpen(true);
-        }}
       />
 
       {/* Item Details Modal */}

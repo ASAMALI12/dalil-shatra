@@ -3,19 +3,12 @@ import {
   X,
   ShieldAlert,
   ShieldCheck,
-  Wallet,
   Store,
   Trash2,
   Plus,
-  ArrowUpRight,
-  ArrowDownLeft,
-  CreditCard,
-  Smartphone,
-  Edit3,
   Search,
   CheckCircle2,
   AlertTriangle,
-  RotateCcw,
   Sparkles,
   LogOut,
   Unlock,
@@ -47,32 +40,21 @@ interface ManagerDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPreviewStore?: (store: DirectoryItem) => void;
-  onOpenWalletModal?: () => void;
 }
 
 export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   isOpen,
   onClose,
   onPreviewStore,
-  onOpenWalletModal,
 }) => {
   const {
-    balance,
-    transactions,
-    totalEarnings,
-    totalWithdrawn,
     isManagerUnlocked,
     managerCredentials,
     loginManager,
     lockManager,
     updateManagerCredentials,
-    setCustomBalance,
-    resetBalance,
-    addManualAdjustment,
-    deleteTransaction,
-    clearTransactions,
-    withdraw,
-    deposit,
+    refreshAdminSession,
+    verifyAdminSession,
   } = useWallet();
 
   const {
@@ -95,7 +77,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   const [seedNotice, setSeedNotice] = useState('');
 
   // Navigation & Sub-tabs
-  const [activeTab, setActiveTab] = useState<'stores' | 'import' | 'claims' | 'reports' | 'ads' | 'wallet' | 'broadcast' | 'security'>('stores');
+  const [activeTab, setActiveTab] = useState<'stores' | 'import' | 'claims' | 'reports' | 'ads' | 'broadcast' | 'security'>('stores');
 
   // Manager Login State (Phone + Username + Password)
   const [loginPhone, setLoginPhone] = useState('');
@@ -122,22 +104,6 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   const [newStoreImage, setNewStoreImage] = useState(
     'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'
   );
-
-  // Wallet Edit/Adjustment State
-  const [isEditBalanceOpen, setIsEditBalanceOpen] = useState(false);
-  const [customBalanceInput, setCustomBalanceInput] = useState(balance.toString());
-  const [adjustmentAmount, setAdjustmentAmount] = useState('');
-  const [adjustmentReason, setAdjustmentReason] = useState('');
-
-  // Withdrawal State
-  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
-  const [withdrawMethod, setWithdrawMethod] = useState<'zaincash' | 'mastercard'>('zaincash');
-  const [withdrawAmount, setWithdrawAmount] = useState<number>(50000);
-  const [withdrawPhone, setWithdrawPhone] = useState('');
-  const [withdrawAccountName, setWithdrawAccountName] = useState('');
-  const [withdrawCardNumber, setWithdrawCardNumber] = useState('');
-  const [withdrawBank, setWithdrawBank] = useState('مصرف الرافدين');
-  const [withdrawMsg, setWithdrawMsg] = useState('');
 
   // Broadcast Notification State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -275,49 +241,6 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     setIsAddStoreOpen(false);
 
     confetti({ particleCount: 60, spread: 70 });
-  };
-
-  // Handle Direct Balance Edit
-  const handleSaveCustomBalance = (e: React.FormEvent) => {
-    e.preventDefault();
-    const num = Number(customBalanceInput);
-    if (!isNaN(num) && num >= 0) {
-      setCustomBalance(num);
-      setIsEditBalanceOpen(false);
-    }
-  };
-
-  // Handle Manual Adjustment
-  const handleApplyAdjustment = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(adjustmentAmount);
-    if (!isNaN(amt) && amt !== 0) {
-      addManualAdjustment(amt, adjustmentReason || 'تسوية رصيد يدوي');
-      setAdjustmentAmount('');
-      setAdjustmentReason('');
-    }
-  };
-
-  // Handle Withdrawal Submit
-  const handleWithdrawSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (withdrawAmount <= 0) return;
-
-    const res = withdraw(withdrawAmount, withdrawMethod, {
-      accountName: withdrawAccountName,
-      phoneNumber: withdrawMethod === 'zaincash' ? withdrawPhone : undefined,
-      cardNumber: withdrawMethod !== 'zaincash' ? withdrawCardNumber || '**** **** **** 4892' : undefined,
-      bankName: withdrawMethod !== 'zaincash' ? withdrawBank : undefined,
-    });
-
-    if (res.success) {
-      setWithdrawMsg(`تم سحب مبلغ ${withdrawAmount.toLocaleString('ar-IQ')} د.ع بنجاح (رقم الإيصال: ${res.referenceNumber})`);
-      setIsWithdrawOpen(false);
-      confetti({ particleCount: 50, spread: 60 });
-      setTimeout(() => setWithdrawMsg(''), 5000);
-    } else {
-      alert(res.message);
-    }
   };
 
   // Handle Broadcast Send
@@ -604,19 +527,6 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('wallet')}
-                className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 font-display text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
-                  activeTab === 'wallet'
-                    ? 'bg-gradient-to-r from-red-600 to-rose-700 text-white shadow-md'
-                    : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
-                }`}
-              >
-                <Wallet className="h-4 w-4" />
-                <span>المحفظة</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setActiveTab('broadcast')}
                 className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 font-display text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer ${
                   activeTab === 'broadcast'
@@ -659,294 +569,9 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
               </div>
             )}
 
-            {withdrawMsg && (
-              <div className="bg-amber-900/60 border-b border-amber-500/40 p-3 text-xs font-bold text-amber-200 flex items-center gap-2 animate-in fade-in">
-                <CheckCircle2 className="h-4 w-4 text-amber-400" />
-                <span>{withdrawMsg}</span>
-              </div>
-            )}
-
             {/* Main Tab Content */}
             <div className="overflow-y-auto p-4 sm:p-6 flex-1 space-y-6">
-              
-              {/* TAB 1: WALLET FULL CONTROL */}
-              {activeTab === 'wallet' && (
-                <div className="space-y-6">
-                  {/* Grand Balance Card */}
-                  <div className="rounded-3xl bg-gradient-to-br from-slate-800 via-slate-900 to-black p-5 sm:p-6 border border-slate-700 shadow-xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-48 h-48 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
-                    
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-700/60">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-xs font-bold text-slate-300">
-                          صندوق أرباح التطبيق والمحفظة المركزية للمدير
-                        </span>
-                      </div>
-                      <span className="font-mono text-xs text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-                        مخفية عن المستخدمين 🔒
-                      </span>
-                    </div>
-
-                    <div className="mt-4 flex flex-col sm:flex-row sm:items-baseline justify-between gap-3">
-                      <div>
-                        <span className="text-xs text-slate-400 block font-medium">الرصيد المتاح حالياً للسحب:</span>
-                        <div className="flex items-baseline gap-2 mt-1">
-                          <span className="font-display text-3xl sm:text-4xl font-extrabold text-white">
-                            {balance.toLocaleString('ar-IQ')}
-                          </span>
-                          <span className="text-sm font-bold text-red-400">دينار عراقي</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {onOpenWalletModal && (
-                          <button
-                            type="button"
-                            onClick={onOpenWalletModal}
-                            className="flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/20 transition-all cursor-pointer border border-white/10"
-                          >
-                            <Wallet className="h-3.5 w-3.5 text-amber-400" />
-                            <span>المحفظة الرقمية ⚡</span>
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => setIsEditBalanceOpen(!isEditBalanceOpen)}
-                          className="flex items-center gap-1.5 rounded-xl bg-red-600/20 border border-red-500/40 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-600 hover:text-white transition-all cursor-pointer"
-                        >
-                          <Edit3 className="h-3.5 w-3.5" />
-                          <span>تعديل الرصيد يدوياً</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="mt-5 grid grid-cols-2 gap-3 pt-4 border-t border-slate-800">
-                      <div>
-                        <span className="text-[11px] text-slate-400">إجمالي إيرادات الإعلانات:</span>
-                        <p className="text-sm font-bold text-emerald-400 font-mono">+{totalEarnings.toLocaleString('ar-IQ')} د.ع</p>
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-slate-400">إجمالي المسحوبات المحولة:</span>
-                        <p className="text-sm font-bold text-rose-400 font-mono">-{totalWithdrawn.toLocaleString('ar-IQ')} د.ع</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Manual Balance Edit Box */}
-                  {isEditBalanceOpen && (
-                    <form onSubmit={handleSaveCustomBalance} className="rounded-2xl bg-slate-800 p-4 border border-slate-700 space-y-3 animate-in fade-in">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-display text-xs font-bold text-white">
-                          تعيين رصيد مخصص للمحفظة
-                        </h5>
-                        <button
-                          type="button"
-                          onClick={resetBalance}
-                          className="text-[11px] font-bold text-rose-400 hover:underline flex items-center gap-1 cursor-pointer"
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                          <span>تصفير الرصيد (0 د.ع)</span>
-                        </button>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="1000"
-                          value={customBalanceInput}
-                          onChange={(e) => setCustomBalanceInput(e.target.value)}
-                          className="flex-1 rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-xs font-bold text-white focus:border-red-500 focus:outline-none"
-                          placeholder="أدخل الرصيد الجديد"
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 cursor-pointer"
-                        >
-                          حفظ الرصيد
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* Quick Action Grid: Withdraw, Adjustment */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setIsWithdrawOpen(!isWithdrawOpen)}
-                      className="flex items-center justify-between p-4 rounded-2xl bg-gradient-to-r from-red-600 to-rose-700 text-white font-display text-xs sm:text-sm font-bold shadow-md hover:from-red-700 hover:to-rose-800 transition-all cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <ArrowUpRight className="h-5 w-5" />
-                        <span>سحب أرباح المدير إلى زين كاش / ماستر كارد</span>
-                      </div>
-                      <span className="text-xs bg-black/20 px-2 py-1 rounded-lg">فوري ⚡</span>
-                    </button>
-
-                    <div className="rounded-2xl bg-slate-800/80 p-3.5 border border-slate-700 flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={adjustmentAmount}
-                        onChange={(e) => setAdjustmentAmount(e.target.value)}
-                        placeholder="مبلغ التسوية (+ أو -)"
-                        className="w-28 rounded-xl border border-slate-600 bg-slate-900 px-2.5 py-2 text-xs font-bold text-white focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={adjustmentReason}
-                        onChange={(e) => setAdjustmentReason(e.target.value)}
-                        placeholder="السبب..."
-                        className="flex-1 rounded-xl border border-slate-600 bg-slate-900 px-2.5 py-2 text-xs text-white focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleApplyAdjustment}
-                        className="rounded-xl bg-slate-700 hover:bg-slate-600 px-3 py-2 text-xs font-bold text-white cursor-pointer"
-                      >
-                        تطبيق
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Withdrawal Form */}
-                  {isWithdrawOpen && (
-                    <form onSubmit={handleWithdrawSubmit} className="rounded-2xl bg-slate-800/90 p-4 sm:p-5 border border-slate-700 space-y-3.5 animate-in fade-in">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-display text-xs sm:text-sm font-bold text-white">
-                          طلب سحب أرباح المدير
-                        </h5>
-                        <button
-                          type="button"
-                          onClick={() => setIsWithdrawOpen(false)}
-                          className="text-xs text-slate-400 hover:text-white"
-                        >
-                          إغلاق
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setWithdrawMethod('zaincash')}
-                          className={`p-2.5 rounded-xl border text-xs font-bold text-right cursor-pointer ${
-                            withdrawMethod === 'zaincash' ? 'border-red-500 bg-red-600/20 text-white' : 'border-slate-700 bg-slate-900 text-slate-400'
-                          }`}
-                        >
-                          📱 محفظة زين كاش
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setWithdrawMethod('mastercard')}
-                          className={`p-2.5 rounded-xl border text-xs font-bold text-right cursor-pointer ${
-                            withdrawMethod === 'mastercard' ? 'border-red-500 bg-red-600/20 text-white' : 'border-slate-700 bg-slate-900 text-slate-400'
-                          }`}
-                        >
-                          💳 ماستر كارد / مصرفي
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-300 mb-1">المبلغ (د.ع)</label>
-                          <input
-                            type="number"
-                            min="1000"
-                            max={balance}
-                            value={withdrawAmount}
-                            onChange={(e) => setWithdrawAmount(Number(e.target.value))}
-                            className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white focus:outline-none"
-                          />
-                        </div>
-                        {withdrawMethod === 'zaincash' ? (
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">رقم زين كاش</label>
-                            <input
-                              type="tel"
-                              value={withdrawPhone}
-                              onChange={(e) => setWithdrawPhone(e.target.value)}
-                              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white focus:outline-none"
-                            />
-                          </div>
-                        ) : (
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-300 mb-1">رقم البطاقة</label>
-                            <input
-                              type="text"
-                              value={withdrawCardNumber}
-                              onChange={(e) => setWithdrawCardNumber(e.target.value)}
-                              placeholder="5421 •••• •••• 4892"
-                              className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white focus:outline-none"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="w-full rounded-xl bg-gradient-to-r from-red-600 to-rose-600 py-2.5 text-xs font-bold text-white hover:from-red-700 hover:to-rose-700 cursor-pointer"
-                      >
-                        تأكيد سحب {withdrawAmount.toLocaleString('ar-IQ')} د.ع فوري
-                      </button>
-                    </form>
-                  )}
-
-                  {/* Transactions List */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-display text-xs font-bold text-slate-300">
-                        سجل الحركات المالية ({transactions.length})
-                      </h4>
-                      {transactions.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={clearTransactions}
-                          className="text-[11px] text-rose-400 hover:underline cursor-pointer"
-                        >
-                          مسح السجل بالكامل
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                      {transactions.map((tx) => (
-                        <div
-                          key={tx.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl border border-slate-800 bg-slate-950/70 text-xs"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`p-1.5 rounded-lg ${tx.type === 'withdrawal' ? 'bg-rose-900/40 text-rose-400' : 'bg-emerald-900/40 text-emerald-400'}`}>
-                              {tx.type === 'withdrawal' ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownLeft className="h-3.5 w-3.5" />}
-                            </span>
-                            <div>
-                              <span className="font-bold text-slate-200 block truncate max-w-[200px]">{tx.title}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">{tx.date}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold font-mono ${tx.type === 'withdrawal' ? 'text-rose-400' : 'text-emerald-400'}`}>
-                              {tx.type === 'withdrawal' ? '-' : '+'}{tx.amount.toLocaleString('ar-IQ')} د.ع
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => deleteTransaction(tx.id)}
-                              className="text-slate-500 hover:text-rose-400 cursor-pointer p-1"
-                              title="حذف الحركة"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB 2: STORES MANAGEMENT & DELETION */}
+              {/* TAB: STORES MANAGEMENT & DELETION */}
               {activeTab === 'stores' && (
                 <div className="space-y-4">
                   {/* Top Bar with Add Store Button */}

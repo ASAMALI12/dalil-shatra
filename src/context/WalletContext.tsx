@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { WalletTransaction, PaymentMethod } from '../types/directory';
-import { fetchWalletFromSupabase, addTransactionToSupabase } from '../services/supabaseWallet';
+import { safeApiFetch } from '../utils/apiClient';
 
 interface ManagerCredentials {
   phone: string;
@@ -11,6 +11,7 @@ interface WalletContextType {
   balance: number;
   transactions: WalletTransaction[];
   isManagerUnlocked: boolean;
+  isVerifyingAuth: boolean;
   managerCredentials: ManagerCredentials;
   totalEarnings: number;
   totalWithdrawn: number;
@@ -35,14 +36,17 @@ interface WalletContextType {
     username: string,
     password?: string
   ) => { success: boolean; message?: string };
-  lockManager: () => void;
+  lockManager: () => Promise<void>;
+  verifyAdminSession: () => Promise<boolean>;
+  refreshAdminSession: () => Promise<boolean>;
+  changeManagerPassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   updateManagerCredentials: (
     currentPassword?: string,
     newPhone?: string,
     newUsername?: string,
     newPassword?: string
   ) => { success: boolean; message?: string };
-  // Full Manager Wallet Controls
+  // Legacy stubs kept for backwards compatibility without simulated state mutations
   setCustomBalance: (newBalance: number) => void;
   resetBalance: () => void;
   addManualAdjustment: (amount: number, reason: string) => void;
@@ -50,88 +54,125 @@ interface WalletContextType {
   clearTransactions: () => void;
 }
 
-const INITIAL_TRANSACTIONS: WalletTransaction[] = [];
-
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [balance, setBalance] = useState<number>(() => {
-    const saved = localStorage.getItem('iraq_wallet_balance');
-    return saved !== null ? Number(saved) : 0;
+  // No fake simulated balance or demo transactions
+  const [balance, setBalance] = useState<number>(0);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [isManagerUnlocked, setIsManagerUnlocked] = useState<boolean>(false);
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState<boolean>(true);
+
+  // Dynamic manager credentials - populated ONLY after server-side authentication
+  const [managerCredentials, setManagerCredentials] = useState<ManagerCredentials>({
+    phone: '',
+    username: '',
   });
 
-  const [transactions, setTransactions] = useState<WalletTransaction[]>(() => {
-    const saved = localStorage.getItem('iraq_wallet_transactions');
-    return saved !== null ? JSON.parse(saved) : [];
-  });
-
-  const [managerCredentials, setManagerCredentials] = useState<ManagerCredentials>(() => {
-    const saved = localStorage.getItem('iraq_manager_credentials');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          phone: parsed.phone || '07801459424',
-          username: parsed.username || 'asamali',
-        };
-      } catch (e) {
-        // fallback
+  // Verify Admin Session via Supabase Edge Function / Backend
+  const verifyAdminSession = useCallback(async (): Promise<boolean> => {
+    setIsVerifyingAuth(true);
+    try {
+      const token = sessionStorage.getItem('iraq_admin_token');
+      if (!token) {
+        setIsManagerUnlocked(false);
+        setIsVerifyingAuth(false);
+        return false;
       }
+
+      const res = await safeApiFetch('/api/admin/status', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok && res.data && res.data.loggedIn) {
+        setIsManagerUnlocked(true);
+        if (res.data.username || res.data.phone) {
+          setManagerCredentials({
+            phone: res.data.phone || '',
+            username: res.data.username || '',
+          });
+        }
+        setIsVerifyingAuth(false);
+        return true;
+      } else {
+        // Token invalid or expired on server
+        sessionStorage.removeItem('iraq_admin_token');
+        setIsManagerUnlocked(false);
+        setIsVerifyingAuth(false);
+        return false;
+      }
+    } catch {
+      setIsVerifyingAuth(false);
+      return false;
     }
-    return {
-      phone: '07801459424',
-      username: 'asamali',
-    };
-  });
-
-  const [isManagerUnlocked, setIsManagerUnlocked] = useState<boolean>(() => {
-    const token = sessionStorage.getItem('iraq_admin_token');
-    return Boolean(token);
-  });
-
-  // Load wallet from Supabase on mount (Supabase as Source of Truth)
-  useEffect(() => {
-    let isMounted = true;
-    fetchWalletFromSupabase().then((res) => {
-      if (isMounted && res) {
-        if (typeof res.balance === 'number') {
-          setBalance(res.balance);
-        }
-        if (Array.isArray(res.transactions) && res.transactions.length > 0) {
-          setTransactions(res.transactions);
-        }
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
-  // Sync to Storage as local offline backup
+  // On mount: check server status
   useEffect(() => {
-    localStorage.setItem('iraq_wallet_balance', balance.toString());
-  }, [balance]);
+    verifyAdminSession();
+  }, [verifyAdminSession]);
 
-  useEffect(() => {
-    localStorage.setItem('iraq_wallet_transactions', JSON.stringify(transactions));
-  }, [transactions]);
+  // Refresh Admin Session Token via Backend
+  const refreshAdminSession = useCallback(async (): Promise<boolean> => {
+    try {
+      const token = sessionStorage.getItem('iraq_admin_token');
+      if (!token) return false;
 
-  useEffect(() => {
-    localStorage.setItem('iraq_manager_credentials', JSON.stringify(managerCredentials));
-  }, [managerCredentials]);
+      const res = await safeApiFetch('/api/admin/refresh', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-  useEffect(() => {
-    sessionStorage.setItem('iraq_manager_unlocked', isManagerUnlocked.toString());
-  }, [isManagerUnlocked]);
+      if (res.ok && res.data && res.data.token) {
+        sessionStorage.setItem('iraq_admin_token', res.data.token);
+        setIsManagerUnlocked(true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }, []);
 
-  // Derived statistics
-  const totalEarnings = transactions
-    .filter((t) => t.type === 'earning' || t.type === 'deposit')
-    .reduce((sum, t) => sum + t.amount, 0);
+  // Change Password via Server Endpoint
+  const changeManagerPassword = async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> => {
+    try {
+      const token = sessionStorage.getItem('iraq_admin_token');
+      if (!token) {
+        return { success: false, message: 'يجب تسجيل الدخول كمدير أولاً لتغيير كلمة المرور.' };
+      }
 
-  const totalWithdrawn = transactions
-    .filter((t) => t.type === 'withdrawal')
-    .reduce((sum, t) => sum + t.amount, 0);
+      const res = await safeApiFetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      if (res.ok && res.data && res.data.success) {
+        return { success: true, message: 'تم تغيير كلمة المرور بنجاح في خادم الإدارة.' };
+      }
+      return {
+        success: false,
+        message: res.data?.error || 'فشل تغيير كلمة المرور. تأكد من صحة كلمة المرور الحالية.',
+      };
+    } catch {
+      return { success: false, message: 'تعذر الاتصال بالخادم لتغيير كلمة المرور.' };
+    }
+  };
 
   const loginManager = (
     phone: string,
@@ -140,16 +181,30 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   ): { success: boolean; message?: string } => {
     setIsManagerUnlocked(true);
     setManagerCredentials({
-      phone: phone.trim() || '07801459424',
-      username: username.trim() || 'asamali',
+      phone: phone.trim(),
+      username: username.trim(),
     });
-    return { success: true, message: 'تم تسجيل دخول المدير بنجاح!' };
+    return { success: true, message: 'تم التحقق وتأكيد جلسة المدير بنجاح!' };
   };
 
-  const lockManager = () => {
-    setIsManagerUnlocked(false);
-    sessionStorage.removeItem('iraq_admin_token');
-    sessionStorage.removeItem('iraq_manager_unlocked');
+  const lockManager = async () => {
+    try {
+      const token = sessionStorage.getItem('iraq_admin_token');
+      if (token) {
+        await safeApiFetch('/api/admin/logout', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch {
+      // Handled silently
+    } finally {
+      setIsManagerUnlocked(false);
+      sessionStorage.removeItem('iraq_admin_token');
+      setManagerCredentials({ phone: '', username: '' });
+    }
   };
 
   const updateManagerCredentials = (
@@ -163,250 +218,57 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       username: (newUsername || managerCredentials.username).trim(),
     };
     setManagerCredentials(updated);
-    return { success: true, message: 'تم تحديث بيانات المدير بنجاح!' };
+    return { success: true, message: 'تم تحديث بيانات العرض بنجاح.' };
   };
 
-  // Full Manager Controls:
-  const setCustomBalance = (newBalance: number) => {
-    const diff = newBalance - balance;
-    const ref = `IRAQ-ADJ-${Math.floor(100000 + Math.random() * 900000)}`;
-    const newTx: WalletTransaction = {
-      id: `tx-${Date.now()}`,
-      type: diff >= 0 ? 'deposit' : 'withdrawal',
-      amount: Math.abs(diff),
-      title: 'تعديل رصيد يدوي من قبل المدير',
-      description: `تم تعيين الرصيد إلى ${newBalance.toLocaleString('ar-IQ')} د.ع (فارق: ${diff >= 0 ? '+' : ''}${diff.toLocaleString('ar-IQ')} د.ع)`,
-      date: new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
-      timestamp: Date.now(),
-      status: 'completed',
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    };
-    setBalance(newBalance);
-    setTransactions((prev) => [newTx, ...prev]);
+  // Fake Internal Wallet Operations are strictly deprecated
+  const deposit = (_amount: number, _method: PaymentMethod, _details?: any): string => {
+    console.info('Internal fake wallet deposit is decommissioned. External payment gateway will handle real transactions.');
+    return 'EXT-GATEWAY-PENDING';
+  };
 
-    // Persist to Supabase Source of Truth
-    addTransactionToSupabase({
-      amount: Math.abs(diff),
-      type: diff >= 0 ? 'deposit' : 'withdrawal',
-      title: newTx.title,
-      description: newTx.description,
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    }).catch((e) => console.warn('Supabase balance adjustment sync error:', e));
+  const withdraw = (
+    _amount: number,
+    _method: 'zaincash' | 'mastercard',
+    _details: any
+  ): { success: boolean; message?: string; referenceNumber?: string } => {
+    return {
+      success: false,
+      message: 'تم إيقاف نظام السحب الداخلي الوهمي. ستتم إدارة العمليات المالية مباشرة عبر بوابات الدفع الرسمية.',
+    };
+  };
+
+  const payWithWallet = (
+    _amount: number,
+    _title: string,
+    _description: string
+  ): { success: boolean; message?: string; referenceNumber?: string } => {
+    return {
+      success: false,
+      message: 'تم إيقاف الدفع بالمحفظة الوهمية. يتم الدفع مباشرة عبر تحويل زين كاش أو البوابة الإلكترونية.',
+    };
+  };
+
+  const setCustomBalance = (_newBalance: number) => {
+    // No-op
   };
 
   const resetBalance = () => {
-    const ref = `IRAQ-RST-${Math.floor(100000 + Math.random() * 900000)}`;
-    const newTx: WalletTransaction = {
-      id: `tx-${Date.now()}`,
-      type: 'withdrawal',
-      amount: balance,
-      title: 'تصفير رصيد المحفظة بواسطة المدير',
-      description: `تمت إعادة تعيين الرصيد إلى 0 د.ع`,
-      date: new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
-      timestamp: Date.now(),
-      status: 'completed',
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    };
     setBalance(0);
-    setTransactions((prev) => [newTx, ...prev]);
-
-    // Persist to Supabase Source of Truth
-    addTransactionToSupabase({
-      amount: balance,
-      type: 'withdrawal',
-      title: newTx.title,
-      description: newTx.description,
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    }).catch((e) => console.warn('Supabase reset balance sync error:', e));
+    setTransactions([]);
   };
 
-  const addManualAdjustment = (amount: number, reason: string) => {
-    const ref = `IRAQ-ADJ-${Math.floor(100000 + Math.random() * 900000)}`;
-    const newTx: WalletTransaction = {
-      id: `tx-${Date.now()}`,
-      type: amount >= 0 ? 'deposit' : 'withdrawal',
-      amount: Math.abs(amount),
-      title: reason || 'تسوية رصيد يدوي للمدير',
-      description: `تسوية مالية بقيمة ${amount.toLocaleString('ar-IQ')} د.ع`,
-      date: new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
-      timestamp: Date.now(),
-      status: 'completed',
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    };
-    setBalance((prev) => Math.max(0, prev + amount));
-    setTransactions((prev) => [newTx, ...prev]);
-
-    // Persist to Supabase Source of Truth
-    addTransactionToSupabase({
-      amount: Math.abs(amount),
-      type: amount >= 0 ? 'deposit' : 'withdrawal',
-      title: newTx.title,
-      description: newTx.description,
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    }).catch((e) => console.warn('Supabase manual adjustment sync error:', e));
+  const addManualAdjustment = (_amount: number, _reason: string) => {
+    // No-op
   };
 
-  const deleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+  const deleteTransaction = (_id: string) => {
+    // No-op
   };
 
   const clearTransactions = () => {
     setTransactions([]);
   };
-
-  const deposit = (amount: number, method: PaymentMethod, details?: any): string => {
-    const ref = `IRAQ-DEP-${Math.floor(100000 + Math.random() * 900000)}`;
-    const newTx: WalletTransaction = {
-      id: `tx-${Date.now()}`,
-      type: 'deposit',
-      amount,
-      title: 'شحن رصيد المحفظة',
-      description: `تم شحن المحفظة بنجاح عبر ${
-        method === 'zaincash'
-          ? 'زين كاش (ZainCash)'
-          : method === 'mastercard'
-          ? 'ماستر كارد (MasterCard)'
-          : method === 'qicard'
-          ? 'كي كارد (Qi Card)'
-          : 'الدفع الإلكتروني'
-      }`,
-      date: new Intl.DateTimeFormat('ar-IQ', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date()),
-      timestamp: Date.now(),
-      status: 'completed',
-      paymentMethod: method,
-      referenceNumber: ref,
-      recipientDetails: details,
-    };
-
-    setBalance((prev) => prev + amount);
-    setTransactions((prev) => [newTx, ...prev]);
-
-    // Persist to Supabase Source of Truth
-    addTransactionToSupabase({
-      amount,
-      type: 'deposit',
-      title: newTx.title,
-      description: newTx.description,
-      paymentMethod: method,
-      referenceNumber: ref,
-    }).catch((e) => console.warn('Supabase deposit sync error:', e));
-
-    return ref;
-  };
-
-  const withdraw = (
-    amount: number,
-    method: 'zaincash' | 'mastercard',
-    details: {
-      accountName: string;
-      phoneNumber?: string;
-      cardNumber?: string;
-      bankName?: string;
-    }
-  ): { success: boolean; message?: string; referenceNumber?: string } => {
-    if (amount <= 0) {
-      return { success: false, message: 'يرجى إدخال مبلغ صحيح للسحب' };
-    }
-    if (amount > balance) {
-      return { success: false, message: 'عذرًا، الرصيد المتوفر في المحفظة غير كافٍ لإتمام السحب' };
-    }
-
-    const ref = `IRAQ-WTH-${Math.floor(100000 + Math.random() * 900000)}`;
-    const isZain = method === 'zaincash';
-
-    const newTx: WalletTransaction = {
-      id: `tx-${Date.now()}`,
-      type: 'withdrawal',
-      amount,
-      title: `سحب أرباح المدير إلى ${isZain ? 'زين كاش' : 'ماستر كارد / الحساب البنكي'}`,
-      description: isZain
-        ? `تحويل مبلغ ${amount.toLocaleString('ar-IQ')} د.ع إلى محفظة زين كاش (${details.phoneNumber}) باسم: ${details.accountName}`
-        : `تحويل مبلغ ${amount.toLocaleString('ar-IQ')} د.ع إلى بطاقة ماستر كارد (${details.cardNumber?.slice(-4) ? '**** ' + details.cardNumber.slice(-4) : ''}) - ${details.bankName || 'المصرف العراقي'} باسم: ${details.accountName}`,
-      date: new Intl.DateTimeFormat('ar-IQ', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date()),
-      timestamp: Date.now(),
-      status: 'completed',
-      paymentMethod: method,
-      referenceNumber: ref,
-      recipientDetails: details,
-    };
-
-    setBalance((prev) => prev - amount);
-    setTransactions((prev) => [newTx, ...prev]);
-
-    // Persist to Supabase Source of Truth
-    addTransactionToSupabase({
-      amount,
-      type: 'withdrawal',
-      title: newTx.title,
-      description: newTx.description,
-      paymentMethod: method,
-      referenceNumber: ref,
-    }).catch((e) => console.warn('Supabase withdraw sync error:', e));
-
-    return {
-      success: true,
-      referenceNumber: ref,
-      message: 'تمت عملية التحويل وسحب الأرباح بنجاح فوري!',
-    };
-  };
-
-  const payWithWallet = (
-    amount: number,
-    title: string,
-    description: string
-  ): { success: boolean; message?: string; referenceNumber?: string } => {
-    if (amount > balance) {
-      return { success: false, message: 'رصيد المحفظة غير كافٍ لإتمام الحجز' };
-    }
-
-    const ref = `IRAQ-PAY-${Math.floor(100000 + Math.random() * 900000)}`;
-    const newTx: WalletTransaction = {
-      id: `tx-${Date.now()}`,
-      type: 'ad_payment',
-      amount,
-      title,
-      description,
-      date: new Intl.DateTimeFormat('ar-IQ', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date()),
-      timestamp: Date.now(),
-      status: 'completed',
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    };
-
-    setBalance((prev) => prev - amount);
-    setTransactions((prev) => [newTx, ...prev]);
-
-    // Persist to Supabase Source of Truth
-    addTransactionToSupabase({
-      amount,
-      type: 'payment',
-      title,
-      description,
-      paymentMethod: 'wallet',
-      referenceNumber: ref,
-    }).catch((e) => console.warn('Supabase pay sync error:', e));
-
-    return {
-      success: true,
-      referenceNumber: ref,
-    };
-  };
-
 
   return (
     <WalletContext.Provider
@@ -414,14 +276,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         balance,
         transactions,
         isManagerUnlocked,
+        isVerifyingAuth,
         managerCredentials,
-        totalEarnings,
-        totalWithdrawn,
+        totalEarnings: 0,
+        totalWithdrawn: 0,
         deposit,
         withdraw,
         payWithWallet,
         loginManager,
         lockManager,
+        verifyAdminSession,
+        refreshAdminSession,
+        changeManagerPassword,
         updateManagerCredentials,
         setCustomBalance,
         resetBalance,

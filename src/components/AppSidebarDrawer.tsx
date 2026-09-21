@@ -6,7 +6,6 @@ import {
   ShieldCheck,
   PhoneCall,
   Store,
-  Wallet,
   Navigation,
   ExternalLink,
   ChevronLeft,
@@ -33,7 +32,7 @@ export const AppSidebarDrawer: React.FC<AppSidebarDrawerProps> = ({
   onOpenWalletModal,
   onDetectGPS,
 }) => {
-  const { isManagerUnlocked, balance } = useWallet();
+  const { isManagerUnlocked } = useWallet();
 
   if (!isOpen) return null;
 
@@ -176,33 +175,6 @@ export const AppSidebarDrawer: React.FC<AppSidebarDrawerProps> = ({
                   </div>
                 </div>
                 <ChevronLeft className="h-4 w-4 text-amber-500 group-hover:text-amber-700" />
-              </button>
-            )}
-
-            {/* محفظة المدير المالية (فقط إذا كان المدير مسجل دخول) */}
-            {isManagerUnlocked && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenWalletModal();
-                }}
-                className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 bg-amber-50/70 border border-amber-200/80 hover:bg-amber-100/70 transition-colors text-slate-800 cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
-                    <Wallet className="h-4 w-4" />
-                  </div>
-                  <div className="text-right">
-                    <div className="font-display text-xs font-bold text-amber-900">
-                      محفظة الأرباح المالية
-                    </div>
-                    <div className="text-[10px] text-amber-700 font-semibold">
-                      الرصيد: {balance.toLocaleString('ar-IQ')} د.ع
-                    </div>
-                  </div>
-                </div>
-                <ChevronLeft className="h-4 w-4 text-amber-600" />
               </button>
             )}
           </div>

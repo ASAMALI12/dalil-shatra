@@ -15,7 +15,6 @@ import {
   Unlock,
   KeyRound,
   Trash2,
-  Wallet,
   Sparkles,
   MessageCircle,
   Crown,
@@ -49,7 +48,7 @@ export const AccountView: React.FC<AccountViewProps> = ({
   onOpenEditStore,
   onPreviewStore,
 }) => {
-  const { isManagerUnlocked, lockManager, balance } = useWallet();
+  const { isManagerUnlocked, lockManager } = useWallet();
   const { items, claimedStoreIds } = useDirectory();
   const [userName, setUserName] = useState('زائر دليل العراق');
 
@@ -250,23 +249,12 @@ export const AccountView: React.FC<AccountViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-slate-300 mt-0.5">
-                  التحكم بالمحفظة • حذف وإدارة المتاجر • بث الإشعارات العامة
+                  إدارة وحذف المتاجر • توثيق الملكية • بث الإشعارات وإدارة الإعلانات
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              {onOpenWalletModal && (
-                <button
-                  type="button"
-                  onClick={onOpenWalletModal}
-                  className="flex items-center gap-1 rounded-2xl bg-amber-500 hover:bg-amber-600 px-4 py-2.5 font-display text-xs font-bold text-slate-950 shadow-md transition-all cursor-pointer whitespace-nowrap"
-                >
-                  <Wallet className="h-4 w-4" />
-                  <span>المحفظة ({balance.toLocaleString('ar-IQ')} د.ع)</span>
-                </button>
-              )}
-
               <button
                 type="button"
                 onClick={onOpenManagerDashboard}

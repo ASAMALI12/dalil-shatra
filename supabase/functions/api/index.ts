@@ -167,6 +167,19 @@ serve(async (req: Request) => {
     }
 
     // ------------------------------------------------------------------------
+    // /admin/logout
+    // ------------------------------------------------------------------------
+    if (path === "/admin/logout" && req.method === "POST") {
+      const authHeader = req.headers.get("authorization");
+      const customToken = req.headers.get("x-admin-token");
+      const token = customToken || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null);
+      if (token) {
+        activeSessions.delete(token);
+      }
+      return jsonResponse({ success: true, message: "تم تسجيل الخروج بنجاح." });
+    }
+
+    // ------------------------------------------------------------------------
     // /stores (GET / POST)
     // ------------------------------------------------------------------------
     if (path === "/stores") {
@@ -233,34 +246,73 @@ serve(async (req: Request) => {
     if (path === "/stores/claim" || path === "/claim/request-otp") {
       if (req.method === "POST") {
         const body = await req.json().catch(() => ({}));
-        const { storeId, storePhone, applicantPhone, applicantName } = body;
+        const { storeId, applicantPhone, applicantName } = body;
         if (!storeId || !applicantPhone) {
           return jsonResponse({ success: false, error: "بيانات الطلب غير مكتملة." }, 400);
         }
+
+        // Verify store existence and ownership state in Supabase
+        const { data: existingStore } = await supabase
+          .from("stores")
+          .select("id, name, phone, is_claimed")
+          .eq("id", storeId)
+          .maybeSingle();
+
+        if (existingStore) {
+          if (existingStore.is_claimed) {
+            return jsonResponse({ success: false, error: "هذا المتجر موثق ومملوك مسبقاً." }, 400);
+          }
+          if (existingStore.phone) {
+            const cleanDbPhone = existingStore.phone.replace(/[^0-9]/g, "");
+            const cleanApplicantPhone = applicantPhone.replace(/[^0-9]/g, "");
+            const isMatch =
+              cleanDbPhone.endsWith(cleanApplicantPhone.slice(-8)) ||
+              cleanApplicantPhone.endsWith(cleanDbPhone.slice(-8)) ||
+              cleanDbPhone === cleanApplicantPhone;
+            if (!isMatch && cleanDbPhone.length >= 7) {
+              return jsonResponse({
+                success: false,
+                error: "رقم الهاتف لا يطابق هاتف المتجر المسجل في قاعدة البيانات.",
+              }, 400);
+            }
+          }
+        }
+
         const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpKey = `${storeId}_${applicantPhone}`;
+        const expiresAt = Date.now() + 5 * 60 * 1000;
+
         otpStorage.set(otpKey, {
           otp: generatedOtp,
-          expiresAt: Date.now() + 5 * 60 * 1000,
+          expiresAt,
           attempts: 0,
         });
+
+        // Record in otp_verifications sensitive table
+        await supabase.from("otp_verifications").insert({
+          id: `otp_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+          phone: applicantPhone,
+          otp_hash: generatedOtp,
+          expires_at: new Date(expiresAt).toISOString(),
+          verified: false,
+          attempts: 0,
+        }).catch(() => {});
 
         // Store claim record in DB if available
         await supabase.from("store_claims").insert({
           id: `claim_${Date.now()}`,
           store_id: storeId,
-          store_name: body.storeName || "متجر",
+          store_name: existingStore?.name || body.storeName || "متجر",
           applicant_name: applicantName || "مقدم الطلب",
           applicant_phone: applicantPhone,
           status: "pending",
+          otp_verified: false,
         }).catch(() => {});
 
         return jsonResponse({
           success: true,
           message: "تم إرسال رمز التحقق بنجاح إلى هاتفك.",
           expiresInSeconds: 300,
-          // Only show in non-production for verification testing
-          debugOtp: generatedOtp,
         });
       }
     }
@@ -271,7 +323,7 @@ serve(async (req: Request) => {
     if (path === "/stores/verify-otp" || path === "/claim/verify-otp") {
       if (req.method === "POST") {
         const body = await req.json().catch(() => ({}));
-        const { storeId, applicantPhone, otp } = body;
+        const { storeId, applicantPhone, applicantName, otp } = body;
         const otpKey = `${storeId}_${applicantPhone}`;
         const record = otpStorage.get(otpKey);
 
@@ -296,16 +348,28 @@ serve(async (req: Request) => {
 
         // OTP verified successfully
         otpStorage.delete(otpKey);
-        await supabase.from("stores").update({
+
+        await supabase.from("otp_verifications").update({
+          verified: true,
+        }).eq("phone", applicantPhone).catch(() => {});
+
+        await supabase.from("store_claims").update({
+          status: "approved",
+          otp_verified: true,
+        }).eq("store_id", storeId).eq("applicant_phone", applicantPhone).catch(() => {});
+
+        const { data: updatedStore } = await supabase.from("stores").update({
           is_claimed: true,
           claim_status: "claimed",
+          claimed_by_name: applicantName || undefined,
           claimed_by_phone: applicantPhone,
           claimed_at: new Date().toISOString(),
-        }).eq("id", storeId).catch(() => {});
+        }).eq("id", storeId).select().maybeSingle().catch(() => ({ data: null }));
 
         return jsonResponse({
           success: true,
           message: "تم توثيق ملكية المتجر بنجاح!",
+          store: updatedStore || undefined,
         });
       }
     }
