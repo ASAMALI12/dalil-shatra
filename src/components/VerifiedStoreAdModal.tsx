@@ -46,8 +46,8 @@ export interface DurationTier {
 export const DURATION_TIERS: DurationTier[] = [
   {
     id: 'month-national',
-    days: 30,
-    label: 'شهر كامل (كل العراق)',
+    days: 5,
+    label: '5 أيام (كل العراق)',
     price: 25000,
     priceText: '25,000 د.ع',
     badge: 'عموم العراق 🇮🇶',
@@ -55,8 +55,8 @@ export const DURATION_TIERS: DurationTier[] = [
   },
   {
     id: 'month-gov',
-    days: 30,
-    label: 'شهر كامل (المحافظة والمدن)',
+    days: 5,
+    label: '5 أيام (المحافظة والمدن)',
     price: 15000,
     priceText: '15,000 د.ع',
     badge: 'مدن المحافظة 💎',
@@ -64,8 +64,8 @@ export const DURATION_TIERS: DurationTier[] = [
   },
   {
     id: 'month-store',
-    days: 30,
-    label: 'شهر كامل (صدارة القسم)',
+    days: 5,
+    label: '5 أيام (صدارة القسم)',
     price: 10000,
     priceText: '10,000 د.ع',
     badge: 'صدارة المتجر 👑',

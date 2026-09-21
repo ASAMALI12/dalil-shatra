@@ -45,8 +45,8 @@ const DURATION_TIERS = [
     priceText: '55,000 د.ع',
   },
   {
-    days: 30 as const,
-    label: 'شهر كامل',
+    days: 5 as const,
+    label: '5 أيام',
     price: 100000,
     priceText: '100,000 د.ع',
   },
@@ -91,7 +91,7 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
   const { broadcastNotification } = useNotification();
 
   const [step, setStep] = useState<'form' | 'payment' | 'success'>('form');
-  const [selectedDuration, setSelectedDuration] = useState<7 | 14 | 30>(7);
+  const [selectedDuration, setSelectedDuration] = useState<7 | 14 | 5 | 30>(7);
 
   // Simplified form per user request:
   // "فقط مستطيل يضع فيه المعلن صوره متجره ويكتب مايريد ويكمل للدفع"

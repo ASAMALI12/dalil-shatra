@@ -38,7 +38,7 @@ export const StoreCategoryAnimatedAdBanner: React.FC<StoreCategoryAnimatedAdBann
           ✨
         </div>
 
-        {/* Banner Content for Stores at 10,000 IQD per month */}
+        {/* Banner Content for Stores at 10,000 IQD for 5 days */}
         <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-1.5 py-0.5">
           {/* Line 1: ضع إعلان متجرك في صدارة هذا القسم 📢 */}
           <div className="flex items-center justify-center gap-2 text-white">
@@ -50,7 +50,7 @@ export const StoreCategoryAnimatedAdBanner: React.FC<StoreCategoryAnimatedAdBann
             </h2>
           </div>
 
-          {/* Line 2: بسعر 10 آلاف لشهر كامل 👑 */}
+          {/* Line 2: بسعر 10 آلاف لمدة 5 أيام 👑 */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
             <span className="font-display text-xs sm:text-sm font-bold text-sky-100">
               بسعر
@@ -59,7 +59,7 @@ export const StoreCategoryAnimatedAdBanner: React.FC<StoreCategoryAnimatedAdBann
               10 آلاف
             </span>
             <span className="font-display text-xs sm:text-sm font-bold text-sky-100">
-              لشهر كامل
+              لمدة 5 أيام
             </span>
             <span className="text-base sm:text-lg text-amber-300 drop-shadow-xs">
               👑

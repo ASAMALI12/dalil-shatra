@@ -274,7 +274,7 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
                           : 'text-slate-600 hover:bg-slate-100'
                       }`}
                     >
-                      {w === 1 ? 'أسبوع واحد' : w === 2 ? 'أسبوعين' : 'شهر كامل (٤ أسابيع)'}
+                      {w === 1 ? 'أسبوع واحد' : w === 2 ? 'أسبوعين' : '5 أيام'}
                     </button>
                   ))}
                 </div>

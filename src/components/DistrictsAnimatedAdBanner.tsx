@@ -50,7 +50,7 @@ export const DistrictsAnimatedAdBanner: React.FC<DistrictsAnimatedAdBannerProps>
             </h2>
           </div>
 
-          {/* Line 2: بسعر 15 ألف لشهر كامل 💎 */}
+          {/* Line 2: بسعر 15 ألف لمدة 5 أيام 💎 */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
             <span className="font-display text-xs sm:text-sm font-bold text-cyan-100">
               بسعر
@@ -59,7 +59,7 @@ export const DistrictsAnimatedAdBanner: React.FC<DistrictsAnimatedAdBannerProps>
               15 ألف
             </span>
             <span className="font-display text-xs sm:text-sm font-bold text-cyan-100">
-              لشهر كامل
+              لمدة 5 أيام
             </span>
             <span className="text-base sm:text-lg text-cyan-200 drop-shadow-xs">
               💎

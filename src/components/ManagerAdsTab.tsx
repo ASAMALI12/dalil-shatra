@@ -673,13 +673,13 @@ export const ManagerAdsTab: React.FC = () => {
                       setDurationDays(days);
                       if (days === 7) setPrice(30000);
                       else if (days === 14) setPrice(55000);
-                      else if (days === 30) setPrice(100000);
+                      else if (days === 5 || days === 30) setPrice(100000);
                     }}
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none"
                   >
                     <option value={7}>أسبوع كامل (30,000 د.ع)</option>
                     <option value={14}>أسبوعان (55,000 د.ع)</option>
-                    <option value={30}>شهر كامل (100,000 د.ع)</option>
+                    <option value={5}>5 أيام (100,000 د.ع)</option>
                   </select>
                 </div>
 
