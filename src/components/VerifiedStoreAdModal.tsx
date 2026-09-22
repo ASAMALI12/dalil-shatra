@@ -28,6 +28,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { CinematicAdBillboard } from './CinematicAdBillboard';
 import { useDirectory } from '../context/DirectoryContext';
 import { useCategoryAds } from '../context/CategoryAdsContext';
 import { useWallet } from '../context/WalletContext';
@@ -112,7 +113,9 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
 
   // Step state: 'form' | 'preview_modal' | 'payment' | 'success'
   const [step, setStep] = useState<'form' | 'payment' | 'success'>('form');
-  const [isPreviewActive, setIsPreviewActive] = useState<boolean>(false);
+  const [isPreviewActive, setIsPreviewActive] = useState<boolean>(true);
+  const [previewVariant, setPreviewVariant] = useState<'billboard' | 'story'>('billboard');
+  const [lightingTheme, setLightingTheme] = useState<'gold' | 'neon-blue' | 'emerald' | 'sunset' | 'purple'>('gold');
   const [currentPreviewImageIdx, setCurrentPreviewImageIdx] = useState(0);
 
   // Core Form Fields
@@ -369,6 +372,7 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
         textColor,
         bgColor,
         animation: animationType,
+        lightingTheme,
       },
     });
 
@@ -709,6 +713,42 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
                     </select>
                   </div>
                 </div>
+
+                {/* Lighting & Atmospheric Theme Selector */}
+                <div className="pt-2 border-t border-slate-800">
+                  <label className="block text-[11px] font-bold text-amber-300 mb-2 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                      <span>إضاءة وهالة لوحة الإعلان (Lighting Ambient FX):</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400">إضاءة محيطية ساحرة للفت انتباه الزبائن</span>
+                  </label>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { id: 'gold', name: 'نيون ذهبي فخم', icon: '👑', desc: 'لمعان ذهبي ملكي' },
+                      { id: 'neon-blue', name: 'ليزر أزرق سيبراني', icon: '⚡', desc: 'إضاءة تقنية مبهرة' },
+                      { id: 'emerald', name: 'زمردي أخضر مشرق', icon: '💎', desc: 'بريق أحجار كريمة' },
+                      { id: 'sunset', name: 'غروب دافئ وجذاب', icon: '🌅', desc: 'تدرج دافئ مغناطيسي' },
+                      { id: 'purple', name: 'بنفسجي إمبراطوري', icon: '🔮', desc: 'فخامة وأناقة قصوى' },
+                    ].map((th) => (
+                      <button
+                        key={th.id}
+                        type="button"
+                        onClick={() => setLightingTheme(th.id as any)}
+                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
+                          lightingTheme === th.id
+                            ? 'bg-amber-500/20 border-amber-400 text-white shadow-md shadow-amber-500/20 scale-[1.03] ring-1 ring-amber-400'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                        }`}
+                      >
+                        <span className="text-base">{th.icon}</span>
+                        <span className="text-[11px] font-bold">{th.name}</span>
+                        <span className="text-[9px] text-slate-400 opacity-80">{th.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Phone & WhatsApp fields */}
@@ -743,95 +783,95 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
                 </div>
               </div>
 
-              {/* LIVE TEST AD PREVIEW BUTTON & BANNER */}
-              <div className="space-y-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsPreviewActive(!isPreviewActive)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 hover:text-white border border-slate-700 text-xs font-bold transition-all cursor-pointer"
-                >
-                  <Eye className="h-4 w-4 text-sky-400" />
-                  <span>{isPreviewActive ? 'إخفاء شاشة اختبار الإعلان' : 'اختبار الإعلان ومعاينته قبل النشر'}</span>
-                </button>
+              {/* LIVE TEST AD PREVIEW BUTTON & LUXURIOUS BILLBOARD */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300 font-black border border-amber-400/30">
+                      <Sparkles className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-black text-amber-300">
+                        معاينة لوحة الإعلان الترويجي الحصري 👑
+                      </h4>
+                      <p className="text-[10px] text-slate-400">
+                        الصورة بكامل حجم اللوحة والمعلومات مضيئة وظاهرة فوق صورة المتجر
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Billboard Format Switcher: Billboard Landscape vs Story Vertical */}
+                  <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewVariant('billboard')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        previewVariant === 'billboard'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      لوحة عريضة (16:9)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewVariant('story')}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        previewVariant === 'story'
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      إعلان عمودي (Story)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPreviewActive(!isPreviewActive)}
+                      className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title={isPreviewActive ? 'تصغير' : 'تكبير'}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
 
                 {isPreviewActive && (
-                  <div className="rounded-2xl border p-4 transition-all duration-300 overflow-hidden relative shadow-xl space-y-3 animate-fade-in bg-slate-900 border-sky-500/40">
-                    <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
-                      <span className="font-bold text-amber-400 flex items-center gap-1">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        <span>معاينة حية للإعلان في التطبيق:</span>
+                  <div className="rounded-3xl border border-amber-500/40 p-2 sm:p-3 bg-slate-950/80 shadow-2xl space-y-2 animate-fade-in">
+                    {/* The Full Majestic Cinematic Ad Billboard */}
+                    <CinematicAdBillboard
+                      businessName={businessName.trim() || activeSelectedStore?.name || 'اسم متجرك التجاري'}
+                      headline={businessName.trim() || activeSelectedStore?.name}
+                      description={
+                        adDescription.trim() ||
+                        'تفاصيل العرض التجاري، الخصومات الحصرية، والخدمات المميزة التي تجذب آلاف الزبائن إلى متجرك مباشرة.'
+                      }
+                      images={images}
+                      phone={adPhone.trim() || '07801234567'}
+                      whatsapp={adWhatsapp.trim() || adPhone.trim()}
+                      offerBadge={offerBadge.trim() || 'عرض حصري 👑'}
+                      governorateName={activeSelectedStore?.governorateName || 'عموم العراق'}
+                      districtName={activeSelectedStore?.districtName}
+                      categoryName={activeSelectedStore?.category || 'متاجر منوعة'}
+                      aiStyle={{
+                        fontSize,
+                        textColor,
+                        bgColor,
+                        animation: animationType,
+                      }}
+                      lightingTheme={lightingTheme}
+                      variant={previewVariant}
+                      isLivePreview={true}
+                    />
+
+                    {/* Notice below billboard to encourage advertiser */}
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 px-2 pt-1">
+                      <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>لوحة الإعلان جاهزة ومطابقة للمواصفات الاحترافية العالمية</span>
                       </span>
-                      <span className="text-[10px] text-slate-400">
-                        {images.length > 0 ? `معرض الصور (${currentPreviewImageIdx + 1}/${images.length})` : 'بدون صورة'}
+                      <span className="text-[10px] text-slate-500">
+                        {images.length > 0 ? `${images.length} صور مضافة • تقليب تلقائي` : 'صورة نموذجية (أضف صورك بالأعلى)'}
                       </span>
-                    </div>
-
-                    {/* The Live Rendered Banner */}
-                    <div
-                      className={`p-4 rounded-2xl border ${bgStyles[bgColor] || bgStyles['gradient-navy']} ${animationClasses[animationType] || ''}`}
-                    >
-                      <div className="flex flex-col sm:flex-row items-center gap-4">
-                        {images.length > 0 && (
-                          <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden border border-white/20 shadow-md">
-                            <img
-                              src={images[currentPreviewImageIdx] || images[0]}
-                              alt="معاينة الإعلان"
-                              className="w-full h-full object-cover"
-                            />
-                            {images.length > 1 && (
-                              <div className="absolute inset-x-0 bottom-1 flex justify-center gap-1">
-                                {images.map((_, i) => (
-                                  <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => setCurrentPreviewImageIdx(i)}
-                                    className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                                      currentPreviewImageIdx === i ? 'w-4 bg-amber-400' : 'w-1.5 bg-white/50'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="flex-1 space-y-1.5 text-center sm:text-right">
-                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-                            <span className="rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold">
-                              {offerBadge}
-                            </span>
-                            <span className="text-[10px] text-sky-200">
-                              {selectedTier.badge}
-                            </span>
-                          </div>
-
-                          <h4
-                            className={`${fontSizeClasses[fontSize]?.title || 'text-base font-bold'}`}
-                            style={{ color: textColor }}
-                          >
-                            {businessName || 'اسم المتجر'}
-                          </h4>
-
-                          <p
-                            className={`${fontSizeClasses[fontSize]?.body || 'text-xs'} text-slate-200`}
-                          >
-                            {adDescription || 'تفاصيل الإعلان وعروض المتجر...'}
-                          </p>
-
-                          <div className="pt-2 flex items-center justify-center sm:justify-start gap-2 text-xs">
-                            <div className="flex items-center gap-1 bg-white/10 px-2.5 py-1 rounded-lg text-white font-mono text-[11px]" dir="ltr">
-                              <Phone className="h-3 w-3 text-emerald-400" />
-                              <span>{adPhone || '0780xxxxxxx'}</span>
-                            </div>
-                            {adWhatsapp && (
-                              <div className="flex items-center gap-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-mono text-[11px]" dir="ltr">
-                                <MessageCircle className="h-3 w-3" />
-                                <span>واتساب</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -882,6 +922,38 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
                     {selectedTier.label}
                   </span>
                 </div>
+              </div>
+
+              {/* Ad Billboard Review in Payment Step */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                  <span className="flex items-center gap-1.5">
+                    <Crown className="h-4 w-4 text-amber-400" />
+                    <span>لوحة إعلانك المعتمدة للنشر:</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-medium">تصميم احترافي جاهز للنشر ✓</span>
+                </div>
+                <CinematicAdBillboard
+                  businessName={businessName.trim() || activeSelectedStore?.name || 'اسم متجرك'}
+                  headline={businessName.trim() || activeSelectedStore?.name}
+                  description={adDescription.trim()}
+                  images={images}
+                  phone={adPhone.trim() || '07801234567'}
+                  whatsapp={adWhatsapp.trim() || adPhone.trim()}
+                  offerBadge={offerBadge.trim() || 'عرض حصري 👑'}
+                  governorateName={activeSelectedStore?.governorateName || 'عموم العراق'}
+                  districtName={activeSelectedStore?.districtName}
+                  categoryName={activeSelectedStore?.category || 'متاجر منوعة'}
+                  aiStyle={{
+                    fontSize,
+                    textColor,
+                    bgColor,
+                    animation: animationType,
+                  }}
+                  lightingTheme={lightingTheme}
+                  variant="compact"
+                  isLivePreview={true}
+                />
               </div>
 
               {/* Payment Methods Selector (ZainCash or MasterCard) */}

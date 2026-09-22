@@ -87,17 +87,25 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           };
 
           setCurrentLocation(newLocation);
+          try {
+            localStorage.setItem('iraq_directory_location', JSON.stringify(newLocation));
+            localStorage.setItem('iraq_has_attempted_gps', 'true');
+          } catch (e) {}
+
           setIsDetectingGPS(false);
           setGpsStatusMessage(
-            `تم تحديد موقعك: ${result.district.name} / ${result.governorate.name}`
+            `تم تحديد موقعك بدقة: ${result.district.name} / ${result.governorate.name} 📍`
           );
+
+          // Dispatch event across the app for automatic view transition
+          window.dispatchEvent(new CustomEvent('iraq_location_updated', { detail: newLocation }));
 
           if (onSuccess) {
             onSuccess(newLocation);
           }
 
-          // Clear status after 5 seconds
-          setTimeout(() => setGpsStatusMessage(null), 5000);
+          // Clear status after 6 seconds
+          setTimeout(() => setGpsStatusMessage(null), 6000);
         },
         (error) => {
           // If high accuracy times out, retry once with cellular/Wi-Fi positioning
@@ -109,11 +117,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setIsDetectingGPS(false);
           let errorMsg = 'تعذر تحديد موقعك عبر GPS.';
           if (error.code === error.PERMISSION_DENIED) {
-            errorMsg = 'تم رفض إذن الوصول للموقع. يمكنك اختيار مدينتك يدوياً في أي وقت.';
+            errorMsg = 'يرجى السماح بصلاحية الموقع في هاتفك أو متصفحك ليتم توجيهك لمدينتك تلقائياً.';
           } else if (error.code === error.POSITION_UNAVAILABLE) {
-            errorMsg = 'خدمة GPS غير مفعلة. يرجى تفعيل الموقع أو اختيار مدينتك يدوياً.';
+            errorMsg = 'خدمة GPS مغلقة في هاتفك. يرجى تفعيل الموقع (Location) في إعدادات الهاتف.';
           } else if (error.code === error.TIMEOUT) {
-            errorMsg = 'استغرقت إشارة GPS وقتاً طويلاً. تأكد من اتصال الإنترنت أو اختر مدينتك يدوياً.';
+            errorMsg = 'استغرقت إشارة GPS وقتاً طويلاً. تأكد من تفعيل خدمة الموقع ثم أعد المحاولة.';
           }
 
           setGpsStatusMessage(errorMsg);
@@ -121,8 +129,8 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         },
         {
           enableHighAccuracy: highAccuracy,
-          timeout: highAccuracy ? 8000 : 12000,
-          maximumAge: 30000,
+          timeout: highAccuracy ? 9000 : 12000,
+          maximumAge: 0, // Fresh GPS satellite or cellular reading
         }
       );
     };
@@ -161,6 +169,11 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     setCurrentLocation(newLocation);
+    try {
+      localStorage.setItem('iraq_directory_location', JSON.stringify(newLocation));
+    } catch (e) {}
+
+    window.dispatchEvent(new CustomEvent('iraq_location_updated', { detail: newLocation }));
     setIsLocationModalOpen(false);
     setGpsStatusMessage(null);
   };
@@ -169,14 +182,20 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const gov = getGovernorate(governorateId);
     if (!gov) return;
 
-    setCurrentLocation((prev) => ({
-      ...prev,
+    const newLocation: UserLocation = {
       governorateId: gov.id,
       governorateName: gov.name,
       districtId: 'all',
       districtName: 'جميع الأقضية',
       isAutoDetected: false,
-    }));
+    };
+
+    setCurrentLocation(newLocation);
+    try {
+      localStorage.setItem('iraq_directory_location', JSON.stringify(newLocation));
+    } catch (e) {}
+
+    window.dispatchEvent(new CustomEvent('iraq_location_updated', { detail: newLocation }));
     setIsLocationModalOpen(false);
   };
 

@@ -212,6 +212,7 @@ export interface CategoryAd {
     isAnimated?: boolean;
     animation?: string;
     fontScale?: number;
+    lightingTheme?: string;
   };
   managerNotes?: string;
 }

@@ -11,6 +11,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { CategoryAd } from '../types/shatrah';
+import { CinematicAdBillboard } from './CinematicAdBillboard';
 
 interface CategoryVipAdBannerProps {
   ads: CategoryAd[];
@@ -27,6 +28,7 @@ export const CategoryVipAdBanner: React.FC<CategoryVipAdBannerProps> = ({
   categoryName,
   categoryIcon,
   onOpenBookingModal,
+  onSelectStorePhone,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [progressPercent, setProgressPercent] = useState(0);
@@ -186,83 +188,30 @@ export const CategoryVipAdBanner: React.FC<CategoryVipAdBannerProps> = ({
           </div>
         )}
 
-        {/* Main Ad Content (Card Layout with Photo, Details, and Contact Buttons) */}
-        <div className="relative z-10 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between pt-1">
-          {/* Ad Image / Visual Icon */}
-          <div className="relative flex-shrink-0 flex items-center gap-3 w-full sm:w-auto">
-            <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-2xl overflow-hidden border-2 border-amber-300 shadow-sm bg-slate-100 flex-shrink-0">
-              <img
-                src={activeAd.imageUrl || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=400&q=80'}
-                alt={activeAd.businessName}
-                referrerPolicy="no-referrer"
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=400&q=80';
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-              <span className="absolute bottom-1 right-1 text-xs">👑</span>
-            </div>
-
-            {/* Mobile inline title and headline */}
-            <div className="flex-1 sm:hidden">
-              <h3 className="font-display text-sm font-extrabold text-slate-900 leading-tight">
-                {activeAd.businessName}
-              </h3>
-              <p className="text-xs font-bold text-rose-600 line-clamp-1 mt-0.5">
-                {activeAd.headline}
-              </p>
-              <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium mt-1">
-                <MapPin className="h-3 w-3 text-slate-400" />
-                <span>منطقة {districtName}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Desktop/Tablet Middle Column: Details & Description */}
-          <div className="hidden sm:block flex-1 pr-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-display text-base font-black text-slate-900 leading-tight">
-                {activeAd.businessName}
-              </h3>
-              <span className="flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 border border-slate-200">
-                <MapPin className="h-3 w-3 text-slate-500" />
-                <span>{districtName}</span>
-              </span>
-            </div>
-            <p className="text-xs font-bold text-rose-600 leading-snug mb-1">
-              {activeAd.headline}
-            </p>
-            <p className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed font-medium">
-              {activeAd.description}
-            </p>
-          </div>
-
-          {/* Right/Action Buttons Column: Phone Call, WhatsApp, and Booking */}
-          <div className="flex flex-wrap sm:flex-col gap-1.5 w-full sm:w-44 flex-shrink-0">
-            {/* Quick Call Button */}
-            <a
-              href={`tel:${cleanPhone}`}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 text-xs font-bold shadow-xs transition-all active:scale-95"
-            >
-              <Phone className="h-3.5 w-3.5" />
-              <span>اتصال فوري</span>
-            </a>
-
-            {/* WhatsApp Button */}
-            {cleanWhatsapp && (
-              <a
-                href={`https://wa.me/964${cleanWhatsapp.startsWith('0') ? cleanWhatsapp.slice(1) : cleanWhatsapp}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white py-2 px-3 text-xs font-bold shadow-xs transition-all active:scale-95"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                <span>واتساب</span>
-              </a>
-            )}
-          </div>
+        {/* Main Ad Content rendered as a Luxurious Cinematic Billboard */}
+        <div className="relative z-10 pt-1">
+          <CinematicAdBillboard
+            businessName={activeAd.businessName}
+            headline={activeAd.headline || activeAd.businessName}
+            description={activeAd.description}
+            images={
+              activeAd.images && activeAd.images.length > 0
+                ? activeAd.images
+                : activeAd.imageUrl
+                ? [activeAd.imageUrl]
+                : []
+            }
+            phone={activeAd.phone}
+            whatsapp={activeAd.whatsapp || activeAd.phone}
+            offerBadge={activeAd.offerBadge || 'إعلان VIP صدارة 👑'}
+            governorateName="عموم العراق"
+            districtName={districtName}
+            categoryName={categoryName}
+            aiStyle={activeAd.aiStyle as any}
+            lightingTheme={((activeAd.aiStyle as any)?.lightingTheme as any) || 'gold'}
+            variant="billboard"
+            onCall={() => onSelectStorePhone?.(activeAd.phone)}
+          />
         </div>
 
         {/* Bottom Bar inside Card: Pagination Indicators & "احجز إعلانك هنا بـ 5 آلاف/يوم" button */}

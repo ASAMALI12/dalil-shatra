@@ -25,6 +25,8 @@ import {
   Upload,
   Megaphone,
   MessageCircle,
+  Loader2,
+  ArrowRight,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '../context/WalletContext';
@@ -80,14 +82,15 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   // Navigation & Sub-tabs
   const [activeTab, setActiveTab] = useState<'stores' | 'import' | 'claims' | 'reports' | 'ads' | 'broadcast' | 'security'>('stores');
 
-  // Manager Login State (Phone + Username + Password + WhatsApp OTP)
-  const [loginPhone, setLoginPhone] = useState('07801459424');
-  const [loginUsername, setLoginUsername] = useState('asamali');
+  // Manager Login State (Step 1: Credentials -> Step 2: WhatsApp OTP Verification)
+  const [loginStep, setLoginStep] = useState<'credentials' | 'otp'>('credentials');
+  const [loginPhone, setLoginPhone] = useState('');
+  const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [whatsappOtp, setWhatsappOtp] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [otpGeneratedCode, setOtpGeneratedCode] = useState('');
+  const [whatsappUrl, setWhatsappUrl] = useState('');
   const [loginError, setLoginError] = useState('');
 
   // Store Management State
@@ -123,38 +126,59 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   const [securitySuccessMsg, setSecuritySuccessMsg] = useState('');
   const [securityErrorMsg, setSecurityErrorMsg] = useState('');
 
-  // Handle Request WhatsApp OTP
-  const handleRequestWhatsappOtp = async () => {
-    setOtpLoading(true);
-    setLoginError('');
-    try {
-      const resp = await safeApiFetch('/api/admin/request-whatsapp-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: loginPhone.trim() || '07801459424' }),
-      });
-      const data = await resp.json();
-      if (resp.ok && data.success) {
-        setIsOtpSent(true);
-        setOtpSuccessMsg('تم إرسال رمز التحقق إلى واتساب المدير (07801459424). يرجى إدخال الرمز لتأكيد الدخول.');
-        if (data.whatsappUrl) {
-          window.open(data.whatsappUrl, '_blank');
-        }
-      } else {
-        setLoginError(data.error || 'فشل إرسال رسالة التأكيد عبر واتساب.');
-      }
-    } catch {
-      setLoginError('تعذر الاتصال بخادم إرسال رسائل الواتساب.');
-    } finally {
-      setOtpLoading(false);
-    }
-  };
-
-  // Handle Manager Login (Phone + Username + Password + WhatsApp OTP)
-  const handleManagerLogin = async (e: React.FormEvent) => {
+  // Step 1: Verify Manager Credentials (Phone + Username + Password) and send WhatsApp OTP
+  const handleVerifyCredentialsAndSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
 
+    if (!loginPhone.trim() || !loginUsername.trim() || !loginPassword.trim()) {
+      setLoginError('يرجى ملء جميع الحقول (رقم الهاتف، واسم المستخدم، وكلمة المرور).');
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const resp = await safeApiFetch('/api/admin/verify-credentials-send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: loginPhone.trim(),
+          username: loginUsername.trim(),
+          password: loginPassword.trim(),
+        }),
+      });
+
+      const data = resp.data || (await resp.json());
+      if (resp.ok && data?.success) {
+        setLoginStep('otp');
+        setOtpGeneratedCode(data.code || '');
+        setWhatsappUrl(data.whatsappUrl || '');
+        if (data.whatsappUrl) {
+          try {
+            window.open(data.whatsappUrl, '_blank');
+          } catch {}
+        }
+      } else {
+        setLoginError(resp.error || data?.error || 'بيانات المدير غير مطابقة. يرجى التأكد من رقم الهاتف واسم المستخدم وكلمة المرور.');
+      }
+    } catch {
+      setLoginError('تعذر الاتصال بالسيرفر للتحقق من بيانات المدير. يرجى المحاولة لاحقاً.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Step 2: Verify WhatsApp OTP to prove real phone ownership and unlock manager permissions
+  const handleVerifyOtpAndUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+
+    if (!whatsappOtp.trim()) {
+      setLoginError('يرجى إدخال رمز التحقق الذي وصلك على تطبيق الواتساب.');
+      return;
+    }
+
+    setIsVerifying(true);
     try {
       const resp = await safeApiFetch('/api/admin/login', {
         method: 'POST',
@@ -163,26 +187,29 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
           username: loginUsername.trim(),
           password: loginPassword.trim(),
           phone: loginPhone.trim(),
-          whatsappOtp: whatsappOtp.trim() || undefined,
+          whatsappOtp: whatsappOtp.trim(),
         }),
       });
-      const data = await resp.json();
-      if (resp.ok && data.success && data.token) {
+
+      const data = resp.data || (await resp.json());
+      if (resp.ok && data?.success && data?.token) {
         sessionStorage.setItem('iraq_admin_token', data.token);
         loginManager(loginPhone, loginUsername);
-        setLoginPhone('07801459424');
-        setLoginUsername('asamali');
+        setLoginStep('credentials');
+        setLoginPhone('');
+        setLoginUsername('');
         setLoginPassword('');
         setWhatsappOtp('');
-        setIsOtpSent(false);
-        confetti({ particleCount: 50, spread: 70 });
-        return;
+        setOtpGeneratedCode('');
+        setWhatsappUrl('');
+        confetti({ particleCount: 60, spread: 80 });
       } else {
-        setLoginError(data.error || 'بيانات تسجيل الدخول غير صحيحة.');
-        return;
+        setLoginError(resp.error || data?.error || 'رمز التحقق غير صحيح أو انتهت صلاحيته.');
       }
     } catch {
-      setLoginError('تعذر الاتصال بخادم الإدارة، يرجى المحاولة لاحقاً.');
+      setLoginError('تعذر التحقق من الرمز مع السيرفر. يرجى المحاولة لاحقاً.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -344,6 +371,9 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     setTimeout(() => setSecuritySuccessMsg(''), 4000);
   };
 
+  // Critical fix: do not render modal backdrop when not open!
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
       <div
@@ -393,135 +423,204 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
           </div>
         </div>
 
-        {/* Content Section: If Locked, Show 3-Field Manager Login (Phone + Username + Password) */}
+        {/* Content Section: If Locked, Show 2-Step Manager Verification */}
         {!isManagerUnlocked ? (
           <div className="p-6 sm:p-8 flex flex-col items-center justify-center text-center space-y-5 flex-1 overflow-y-auto">
             <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-tr from-amber-600 to-red-600 text-white shadow-2xl shadow-red-900/50">
               <ShieldCheck className="h-8 w-8 text-white" />
             </div>
 
-            <div className="max-w-md space-y-1.5">
-              <h4 className="font-display text-lg sm:text-xl font-bold text-white">
-                تسجيل دخول المدير (رقم الهاتف + اليوزر + الباسوورد)
-              </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                يدخل المستخدم العادي بدون أي تسجيل، بينما يفتح المدير النظام بصلاحيات إدارية حصرية من ضمنها ظهور المحفظة، حذف المتاجر، والتحكم بالأرباح.
-              </p>
-            </div>
-
-            <form onSubmit={handleManagerLogin} className="w-full max-w-sm space-y-3.5 text-right">
-              
-              {/* 1. Phone Number */}
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  رقم هاتف المدير *
-                </label>
-                <div className="relative flex items-center">
-                  <Phone className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
-                  <input
-                    type="tel"
-                    required
-                    value={loginPhone}
-                    onChange={(e) => setLoginPhone(e.target.value)}
-                    placeholder="07801459424"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono font-bold text-white focus:border-red-500 focus:outline-none"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              {/* 2. Username */}
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  اسم المستخدم (اليوزر / Username) *
-                </label>
-                <div className="relative flex items-center">
-                  <User className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
-                  <input
-                    type="text"
-                    required
-                    value={loginUsername}
-                    onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="asamali"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-semibold text-white focus:border-red-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* 3. Password */}
-              <div>
-                <label className="block text-xs font-bold text-slate-300 mb-1">
-                  كلمة المرور (الباسوورد / Password) *
-                </label>
-                <div className="relative flex items-center">
-                  <KeyRound className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="AsamasaM12"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono text-white focus:border-red-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* WhatsApp Confirmation Trigger */}
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-2.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
-                    <MessageCircle className="h-3.5 w-3.5 text-emerald-400" />
-                    <span>تأكيد تسجيل الدخول عبر واتساب:</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleRequestWhatsappOtp}
-                    disabled={otpLoading}
-                    className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    {otpLoading ? 'جاري الإرسال...' : isOtpSent ? 'إعادة الإرسال' : 'إرسال رسالة تأكيد للواتساب'}
-                  </button>
-                </div>
-
-                {otpSuccessMsg && (
-                  <p className="text-[10px] text-emerald-200/90 leading-relaxed">
-                    {otpSuccessMsg}
+            {loginStep === 'credentials' ? (
+              /* STEP 1: Enter Phone + Username + Password */
+              <>
+                <div className="max-w-md space-y-1.5">
+                  <h4 className="font-display text-lg sm:text-xl font-bold text-white">
+                    تسجيل دخول المدير (التحقق من البيانات)
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    أدخل رقم الهاتف واسم المستخدم وكلمة المرور. عند تطابق البيانات سيتم إرسال رمز تحقق للواتساب لتأكيد ملكية الرقم.
                   </p>
-                )}
+                </div>
 
-                {isOtpSent && (
+                <form onSubmit={handleVerifyCredentialsAndSendOtp} className="w-full max-w-sm space-y-3.5 text-right">
+                  {/* 1. Phone Number */}
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      رمز التحقق المرسل إلى الواتساب:
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      رقم هاتف المدير *
+                    </label>
+                    <div className="relative flex items-center">
+                      <Phone className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
+                      <input
+                        type="tel"
+                        required
+                        value={loginPhone}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+                          setLoginPhone(val);
+                        }}
+                        placeholder="رقم الهاتف (مثال: 07801459424)"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono font-bold text-white focus:border-red-500 focus:outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. Username */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      اسم المستخدم (اليوزر) *
+                    </label>
+                    <div className="relative flex items-center">
+                      <User className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
+                      <input
+                        type="text"
+                        required
+                        value={loginUsername}
+                        onChange={(e) => setLoginUsername(e.target.value)}
+                        placeholder="اسم المستخدم للإدارة"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-semibold text-white focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 3. Password */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      كلمة المرور (الباسوورد) *
+                    </label>
+                    <div className="relative flex items-center">
+                      <KeyRound className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
+                      <input
+                        type="password"
+                        required
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="كلمة المرور السرية"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono text-white focus:border-red-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {loginError && (
+                    <div className="rounded-xl bg-rose-950/80 border border-rose-500/50 p-2.5 text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                      <span>{loginError}</span>
+                    </div>
+                  )}
+
+                  {/* Submit Step 1 Button */}
+                  <button
+                    type="submit"
+                    disabled={isVerifying}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 py-3.5 font-display text-sm font-bold text-white shadow-lg hover:from-red-700 hover:to-rose-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>جاري التحقق من صحة البيانات...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>التحقق ومتابعة الدخول</span>
+                      </>
+                    )}
+                  </button>
+                </form>
+              </>
+            ) : (
+              /* STEP 2: Appears ONLY if data is correct -> WhatsApp Verification Code */
+              <>
+                <div className="max-w-md space-y-2">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs font-bold text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>تم التحقق من صحة البيانات بنجاح</span>
+                  </div>
+                  <h4 className="font-display text-lg sm:text-xl font-bold text-white">
+                    تأكيد ملكية رقم الهاتف عبر واتساب
+                  </h4>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    تم إرسال رمز التحقق إلى حساب الواتساب على رقمك ({loginPhone}). أدخل الرمز في الحقل أدناه لإثبات ملكيتك وفتح صلاحيات المدير.
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerifyOtpAndUnlock} className="w-full max-w-sm space-y-4 text-right">
+                  {/* WhatsApp Quick Link */}
+                  {whatsappUrl && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white py-2.5 px-3 text-xs font-bold transition-all shadow-md"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span>فتح رسالة الرمز في واتساب</span>
+                    </a>
+                  )}
+
+                  {/* WhatsApp OTP Field */}
+                  <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-950/20 p-4 space-y-2">
+                    <label className="block text-xs font-bold text-emerald-300 text-center">
+                      أدخل رمز التحقق (6 أرقام) المرسل إلى الواتساب:
                     </label>
                     <input
                       type="text"
+                      required
+                      autoFocus
+                      maxLength={6}
                       value={whatsappOtp}
-                      onChange={(e) => setWhatsappOtp(e.target.value)}
-                      placeholder="أدخل الرمز المكون من 6 أرقام"
+                      onChange={(e) => setWhatsappOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="• • • • • •"
                       dir="ltr"
-                      className="w-full rounded-xl border border-emerald-500/40 bg-slate-800/90 py-2 px-3 text-xs font-mono font-bold text-emerald-300 focus:border-emerald-400 focus:outline-none text-center"
+                      className="w-full rounded-xl border border-emerald-500/60 bg-slate-900 py-3 px-3 text-xl font-mono font-black text-emerald-300 tracking-[0.4em] focus:border-emerald-400 focus:outline-none text-center shadow-inner"
                     />
+                    {otpGeneratedCode && (
+                      <p className="text-[10px] text-slate-400 text-center">
+                        كود التحقق الخاص بك: <span className="font-mono text-emerald-400 font-bold">{otpGeneratedCode}</span>
+                      </p>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {loginError && (
-                <div className="rounded-xl bg-rose-950/80 border border-rose-500/50 p-2.5 text-xs font-bold text-rose-300 flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
-                  <span>{loginError}</span>
-                </div>
-              )}
+                  {loginError && (
+                    <div className="rounded-xl bg-rose-950/80 border border-rose-500/50 p-2.5 text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                      <AlertTriangle className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                      <span>{loginError}</span>
+                    </div>
+                  )}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 py-3.5 font-display text-sm font-bold text-white shadow-lg hover:from-red-700 hover:to-rose-700 active:scale-95 transition-all cursor-pointer"
-              >
-                <Unlock className="h-4 w-4" />
-                <span>دخول المدير وتفعيل صلاحيات الحذف والنشر</span>
-              </button>
-            </form>
+                  {/* Submit Step 2 Button */}
+                  <button
+                    type="submit"
+                    disabled={isVerifying}
+                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 font-display text-sm font-bold text-white shadow-lg hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                  >
+                    {isVerifying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>جاري التحقق من الرمز...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Unlock className="h-4 w-4" />
+                        <span>تأكيد الرمز وفتح صلاحيات المدير</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Back to Step 1 Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginStep('credentials');
+                      setLoginError('');
+                    }}
+                    className="w-full text-center text-xs text-slate-400 hover:text-white transition-colors cursor-pointer py-1"
+                  >
+                    ← الرجوع لتعديل البيانات أو رقم الهاتف
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         ) : (
           /* Unlocked Admin Dashboard */

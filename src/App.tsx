@@ -8,6 +8,7 @@ import { StoresCircularView } from './components/StoresCircularView';
 import { AppSidebarDrawer } from './components/AppSidebarDrawer';
 import { ItemDetailsModal } from './components/ItemDetailsModal';
 import { AdvertiseModal } from './components/AdvertiseModal';
+import { VerifiedStoreAdModal } from './components/VerifiedStoreAdModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { NewsModal } from './components/NewsModal';
 import { OffersView } from './components/OffersView';
@@ -630,6 +631,17 @@ function IraqDirectoryApp() {
 
   // Auto-detect GPS on initial app entry and send user directly to their city
   useEffect(() => {
+    // If user already has a saved location from previous session, respect it
+    const savedLocationStr = localStorage.getItem('iraq_directory_location');
+    if (savedLocationStr) {
+      try {
+        const savedLoc = JSON.parse(savedLocationStr);
+        if (savedLoc && savedLoc.governorateId && savedLoc.governorateId !== 'baghdad') {
+          navigateToDirectLocation(savedLoc.governorateId, savedLoc.districtId || 'all', savedLoc.districtName || 'الكل', true);
+        }
+      } catch (e) {}
+    }
+
     const hasRedirected = sessionStorage.getItem('iraq_app_gps_auto_redirected');
     if (!hasRedirected) {
       sessionStorage.setItem('iraq_app_gps_auto_redirected', 'true');
@@ -638,6 +650,23 @@ function IraqDirectoryApp() {
       });
     }
   }, [detectGPSLocation, navigateToDirectLocation]);
+
+  // Global listener for explicit location changes from anywhere in the app
+  useEffect(() => {
+    const handleLocationUpdated = (e: any) => {
+      const loc = e.detail;
+      if (loc && loc.governorateId) {
+        navigateToDirectLocation(
+          loc.governorateId,
+          loc.districtId || 'all',
+          loc.districtName || 'الكل',
+          false
+        );
+      }
+    };
+    window.addEventListener('iraq_location_updated', handleLocationUpdated);
+    return () => window.removeEventListener('iraq_location_updated', handleLocationUpdated);
+  }, [navigateToDirectLocation]);
 
   // Deep linking: open shared store directly if ?storeId=... or /store/:id or #/store/:id or appUrlOpen is in the URL
   useEffect(() => {
@@ -1080,10 +1109,11 @@ function IraqDirectoryApp() {
         }}
       />
 
-      {/* Advertise Modal */}
-      <AdvertiseModal
+      {/* Verified Store Ad Modal - صفحة إنشاء إعلان للمعلن مع خيارات الأسعار والذكاء الاصطناعي وبوابة التحويل */}
+      <VerifiedStoreAdModal
         isOpen={isAdModalOpen}
         onClose={() => setIsAdModalOpen(false)}
+        initialScope={navLevel === 'stores' ? 'store_area' : navLevel === 'districts' ? 'governorate' : 'national'}
       />
 
       {/* Open Store Modal */}

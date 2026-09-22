@@ -32,7 +32,19 @@ export function getApiBaseUrl(): string {
     } catch {}
   }
 
-  // 3. Fallback to production Supabase Edge Function
+  // 3. In Web browser environment (Preview / Web App), use relative root ('') so requests go directly to the local active server
+  if (typeof window !== 'undefined') {
+    const isCapacitorNative = Boolean(
+      (window as any).Capacitor?.isNativePlatform?.() ||
+      (window as any).Capacitor?.platform === 'android' ||
+      (window as any).Capacitor?.platform === 'ios'
+    );
+    if (!isCapacitorNative) {
+      return '';
+    }
+  }
+
+  // 4. Fallback to production Supabase Edge Function ONLY when compiled inside a native mobile APK
   return DEFAULT_API_URL;
 }
 
