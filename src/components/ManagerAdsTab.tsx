@@ -19,7 +19,17 @@ import {
   AlertCircle,
   Phone,
   Image as ImageIcon,
+  Check,
+  XCircle,
+  Eye,
+  Smartphone,
+  CreditCard,
+  FileCheck2,
+  X,
+  Palette,
+  Maximize2,
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { useCategoryAds } from '../context/CategoryAdsContext';
 import { useWallet } from '../context/WalletContext';
 import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
@@ -27,7 +37,15 @@ import { CIRCULAR_CATEGORIES } from './StoresCircularView';
 import { CategoryAd } from '../types/shatrah';
 
 export const ManagerAdsTab: React.FC = () => {
-  const { ads, addCategoryAd, deleteCategoryAd, renewCategoryAd } = useCategoryAds();
+  const {
+    ads,
+    pendingAds,
+    addCategoryAd,
+    deleteCategoryAd,
+    renewCategoryAd,
+    approveAndPublishAd,
+    rejectAd,
+  } = useCategoryAds();
   const { balance } = useWallet();
 
   // Filters
@@ -35,6 +53,8 @@ export const ManagerAdsTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
+  const [selectedReceiptUrl, setSelectedReceiptUrl] = useState<string | null>(null);
+  const [previewingAdImages, setPreviewingAdImages] = useState<string[] | null>(null);
 
   // Form State for Adding New Ad
   const [newScope, setNewScope] = useState<'national' | 'governorate' | 'store_area'>('national');
@@ -175,6 +195,28 @@ export const ManagerAdsTab: React.FC = () => {
     setTimeout(() => setActionSuccessMsg(''), 3000);
   };
 
+  const handleApproveAd = async (ad: CategoryAd) => {
+    const success = await approveAndPublishAd(ad.id);
+    if (success) {
+      confetti({ particleCount: 75, spread: 80, origin: { y: 0.6 } });
+      setActionSuccessMsg(`🎉 تم اعتماد ونشر إعلان متجر "${ad.businessName}" رسمياً في التطبيق!`);
+      setTimeout(() => setActionSuccessMsg(''), 4500);
+    } else {
+      alert('حدث خطأ أثناء محاولة نشر الإعلان.');
+    }
+  };
+
+  const handleRejectAd = async (ad: CategoryAd) => {
+    const reason = window.prompt(`يرجى كتابة سبب رفض إعلان "${ad.businessName}" (اختياري):`, 'صورة الوصل غير واضحة أو لم يصل التحويل');
+    if (reason !== null) {
+      const success = await rejectAd(ad.id, reason);
+      if (success) {
+        setActionSuccessMsg(`تم رفض إعلان "${ad.businessName}".`);
+        setTimeout(() => setActionSuccessMsg(''), 3500);
+      }
+    }
+  };
+
   const formatRemainingTime = (expiresAt: number) => {
     const diff = expiresAt - Date.now();
     if (diff <= 0) return 'منتهي الصلاحية';
@@ -221,6 +263,253 @@ export const ManagerAdsTab: React.FC = () => {
         <div className="rounded-xl bg-emerald-950/80 border border-emerald-500/50 p-3 text-xs font-bold text-emerald-200 flex items-center gap-2 animate-in fade-in duration-200">
           <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
           <span>{actionSuccessMsg}</span>
+        </div>
+      )}
+
+      {/* PENDING APPROVAL QUEUE (New Feature requested by user) */}
+      {pendingAds.length > 0 && (
+        <div className="rounded-3xl border-2 border-amber-500/50 bg-gradient-to-b from-amber-950/40 via-slate-900 to-slate-900 p-4 sm:p-5 shadow-2xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-500/20 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-slate-950 font-black shadow-md">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <h5 className="font-display text-sm sm:text-base font-black text-amber-300 flex items-center gap-2">
+                  <span>طلبات إعلانات جديدة بانتظار موافقة ونشر المدير</span>
+                  <span className="rounded-full bg-amber-400 text-slate-950 px-2 py-0.5 text-xs font-black animate-pulse">
+                    {pendingAds.length} جديد
+                  </span>
+                </h5>
+                <p className="text-[11px] text-slate-300">
+                  قم بمراجعة صورة وصل التحويل والـ 5 صور المرفقة، ثم اضغط زر "نشر الإعلان" لتفعيله فوراً
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3.5">
+            {pendingAds.map((ad) => {
+              const allImages = ad.images && ad.images.length > 0 ? ad.images : ad.imageUrl ? [ad.imageUrl] : [];
+              return (
+                <div
+                  key={ad.id}
+                  className="rounded-2xl border border-amber-500/30 bg-slate-950/80 p-4 space-y-3 shadow-lg"
+                >
+                  <div className="flex flex-col lg:flex-row items-start justify-between gap-4">
+                    {/* Main Details */}
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 text-[10px] font-bold">
+                          {ad.scope === 'national' ? 'عموم العراق 🇮🇶' : ad.scope === 'governorate' ? `محافظة (${ad.governorateName})` : `صدارة القسم (${ad.districtName})`}
+                        </span>
+                        <span className="rounded-md bg-sky-950 text-sky-300 border border-sky-800 px-2 py-0.5 text-[10px] font-bold">
+                          {ad.paymentMethod || 'زين كاش'}
+                        </span>
+                        <span className="rounded-md bg-slate-800 text-slate-300 px-2 py-0.5 text-[10px] font-mono">
+                          {ad.referenceNumber}
+                        </span>
+                      </div>
+
+                      <h6 className="font-display text-base font-black text-white">
+                        {ad.businessName}
+                      </h6>
+
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        {ad.description || ad.headline}
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 pt-1">
+                        <span className="flex items-center gap-1 font-mono text-emerald-400 font-bold" dir="ltr">
+                          <Phone className="h-3 w-3" />
+                          <span>{ad.phone}</span>
+                        </span>
+                        <span className="text-amber-400 font-bold">
+                          قيمة الرسوم: {(ad.price || 0).toLocaleString('ar-IQ')} د.ع ({ad.durationDays || 5} أيام)
+                        </span>
+                        {ad.aiStyle && (
+                          <span className="flex items-center gap-1 text-sky-300 text-[10px] bg-sky-950/60 px-2 py-0.5 rounded-md border border-sky-800">
+                            <Palette className="h-3 w-3" />
+                            <span>تصميم ذكي: خط {ad.aiStyle.fontSize || 'متوسط'} • نمط {ad.aiStyle.animation || 'وميض'}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Images Gallery & Receipt Card */}
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                      {/* Attached Store Images (Up to 5) */}
+                      {allImages.length > 0 && (
+                        <div className="space-y-1">
+                          <div className="text-[10px] text-slate-400 font-bold">
+                            صور المتجر ({allImages.length}):
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {allImages.slice(0, 5).map((img, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setPreviewingAdImages(allImages)}
+                                className="h-14 w-14 rounded-xl overflow-hidden border border-slate-700 hover:border-amber-400 transition-all cursor-pointer aspect-square"
+                              >
+                                <img src={img} alt="" className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Receipt Image Button */}
+                      {ad.receiptImage ? (
+                        <div className="space-y-1">
+                          <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                            <FileCheck2 className="h-3 w-3" />
+                            <span>وصل التحويل:</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReceiptUrl(ad.receiptImage || null)}
+                            className="relative group h-14 w-14 rounded-xl overflow-hidden border-2 border-emerald-500 shadow-md hover:scale-105 transition-all cursor-pointer"
+                          >
+                            <img
+                              src={ad.receiptImage}
+                              alt="وصل التحويل"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 flex items-center justify-center text-white">
+                              <Eye className="h-4 w-4" />
+                            </div>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-slate-800 bg-slate-900 p-2 text-center text-[10px] text-slate-400">
+                          بدون صورة وصل
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions for this pending ad */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800/80">
+                    <div className="text-[11px] text-slate-400">
+                      تاريخ التقديم: {new Date(ad.createdAt).toLocaleString('ar-IQ')}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleRejectAd(ad)}
+                        className="flex items-center gap-1.5 rounded-xl bg-rose-950/70 hover:bg-rose-900 text-rose-300 border border-rose-800 px-3.5 py-2 text-xs font-bold transition-all cursor-pointer"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        <span>رفض الإعلان</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleApproveAd(ad)}
+                        className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-5 py-2 text-xs shadow-lg transition-all cursor-pointer active:scale-95"
+                      >
+                        <Check className="h-4 w-4" />
+                        <span>نشر الإعلان رسمياً في التطبيق ✓</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* RECEIPT ZOOM MODAL */}
+      {selectedReceiptUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in"
+          onClick={() => setSelectedReceiptUrl(null)}
+        >
+          <div
+            className="relative max-w-lg w-full bg-slate-900 rounded-3xl p-4 border border-slate-700 shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <span className="font-bold text-xs text-white flex items-center gap-2">
+                <FileCheck2 className="h-4 w-4 text-emerald-400" />
+                <span>تدقيق صورة وصل التحويل المالي المرفق</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptUrl(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="rounded-2xl overflow-hidden border border-slate-800 max-h-[70vh] flex items-center justify-center bg-black">
+              <img
+                src={selectedReceiptUrl}
+                alt="وصل التحويل بالحجم الكامل"
+                className="w-full h-auto object-contain max-h-[70vh]"
+              />
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptUrl(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold"
+              >
+                إغلاق المعاينة
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IMAGES GALLERY MODAL */}
+      {previewingAdImages && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-md animate-fade-in"
+          onClick={() => setPreviewingAdImages(null)}
+        >
+          <div
+            className="relative max-w-2xl w-full bg-slate-900 rounded-3xl p-4 border border-slate-700 shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+            dir="rtl"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <span className="font-bold text-xs text-white">
+                معاينة صور الإعلان المرفقة ({previewingAdImages.length} صور)
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewingAdImages(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[70vh] overflow-y-auto p-1">
+              {previewingAdImages.map((img, i) => (
+                <div key={i} className="rounded-xl overflow-hidden border border-slate-800 aspect-video bg-black">
+                  <img src={img} alt={`صورة ${i + 1}`} className="w-full h-full object-cover" />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setPreviewingAdImages(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

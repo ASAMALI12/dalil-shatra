@@ -46,6 +46,7 @@ const activeAdminSessions = new Map<string, { username: string; createdAt: numbe
 
 // Anti-brute force rate limiting for admin login (Max 5 attempts per 10 minutes)
 const adminLoginAttempts = new Map<string, { count: number; lastAttempt: number }>();
+const adminWhatsappOtps = new Map<string, { code: string; expiresAt: number }>();
 
 // In-memory OTP fallback storage with anti-abuse rate limiting
 interface ClaimOtpEntry {
@@ -217,7 +218,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // 3. SECURE ADMIN AUTHENTICATION (Strictly Server-side from Environment Variables)
   app.post("/api/admin/login", (req: Request, res: Response) => {
-    const { username, password } = req.body;
+    const { username, password, phone, whatsappOtp } = req.body;
     const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "client";
 
     if (!username || !password) {
@@ -251,6 +252,30 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       cleanPass === "AsamasaM12" ||
       cleanPass === "admin123456";
 
+    // Validate manager phone: 07801459424
+    if (phone) {
+      const cleanPhone = String(phone).replace(/\D/g, "");
+      const isValidPhone = cleanPhone.endsWith("7801459424") || cleanPhone === "07801459424";
+      if (!isValidPhone) {
+        return res.status(401).json({
+          success: false,
+          error: "رقم هاتف المدير غير مصرح به. يرجى إدخال رقم هاتف الإدارة الرسمي (07801459424).",
+        });
+      }
+    }
+
+    // If OTP was sent, verify it
+    if (whatsappOtp) {
+      const storedOtp = adminWhatsappOtps.get("07801459424");
+      if (!storedOtp || storedOtp.expiresAt < Date.now() || storedOtp.code !== String(whatsappOtp).trim()) {
+        return res.status(401).json({
+          success: false,
+          error: "رمز تأكيد الواتساب غير صحيح أو انتهت صلاحيته.",
+        });
+      }
+      adminWhatsappOtps.delete("07801459424");
+    }
+
     if (!isValidUser || !isValidPass) {
       const currentCount = rate && now - rate.lastAttempt < 10 * 60 * 1000 ? rate.count + 1 : 1;
       adminLoginAttempts.set(clientIp, { count: currentCount, lastAttempt: now });
@@ -279,6 +304,48 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       token: sessionToken,
       expiresAt,
       message: "تم تسجيل الدخول بنجاح إلى لوحة إدارة دليل العراق 🇮🇶",
+    });
+  });
+
+  // Request WhatsApp confirmation link/code for Manager
+  app.post("/api/admin/request-whatsapp-otp", (req: Request, res: Response) => {
+    const { phone } = req.body;
+    const cleanPhone = phone ? String(phone).replace(/\D/g, "") : "07801459424";
+    if (!cleanPhone.endsWith("7801459424")) {
+      return res.status(400).json({ success: false, error: "رقم هاتف غير معتمد للمدير." });
+    }
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    adminWhatsappOtps.set("07801459424", { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+    const waText = encodeURIComponent(
+      `🔐 تأكيد دخول مدير تطبيق دليل العراق:\nرمز التحقق الخاص بك هو: ${code}\nيرجى عدم مشاركة هذا الرمز مع أي شخص.\nالوقت: ${new Date().toLocaleTimeString('ar-IQ')}`
+    );
+    const whatsappUrl = `https://wa.me/9647801459424?text=${waText}`;
+    res.json({
+      success: true,
+      code,
+      whatsappUrl,
+      message: "تم تجهيز رسالة تأكيد الواتساب لرقم المدير 07801459424 بنجاح.",
+    });
+  });
+
+  // Official payment destination accounts (ZainCash + MasterCard)
+  app.get("/api/payment-details", (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      zaincash: {
+        number: process.env.ZAIN_CASH_NUMBER || "07801459424",
+        holder: "محفظة زين كاش المعتمدة",
+        title: "محفظة زين كاش (ZainCash)",
+        instructions: "قم بالتحويل المباشر من تطبيق زين كاش إلى رقم المحفظة (07801459424) ثم أرفق صورة الوصل للتأكيد.",
+      },
+      mastercard: {
+        number: process.env.MASTERCARD_NUMBER || "4538548308",
+        holder: "حساب ماستر كارد المعتمد",
+        title: "بطاقة وحساب ماستر كارد (MasterCard)",
+        instructions: "قم بالتحويل البنكي أو عبر تطبيق المصرف إلى رقم حساب الماستر كارد الموضح أعلاه (4538548308) ثم أرفق صورة الوصل.",
+      },
+      managerPhone: "07801459424",
+      managerWhatsapp: "9647801459424",
     });
   });
 

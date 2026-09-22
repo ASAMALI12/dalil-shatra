@@ -196,6 +196,11 @@ ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS governorate
 ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS district_name TEXT;
 ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS payment_method TEXT;
 ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS reference_number TEXT;
+ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS images JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending_approval';
+ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS ai_style JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE IF EXISTS public.advertisements ADD COLUMN IF NOT EXISTS manager_notes TEXT;
 
 -- 8. WALLETS (محفظة الإيرادات - سرية - Service Role Only)
 CREATE TABLE IF NOT EXISTS public.wallets (
@@ -397,3 +402,32 @@ DROP POLICY IF EXISTS "Service Role Full Access Profiles" ON public.profiles;
 CREATE POLICY "Users can read own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Service Role Full Access Profiles" ON public.profiles FOR ALL USING (auth.role() = 'service_role');
+
+-- 10. PAYMENT ACCOUNTS (حسابات التحويل المالي الرسمية - زين كاش وماستر كارد)
+CREATE TABLE IF NOT EXISTS public.payment_accounts (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL, -- 'zaincash' | 'mastercard'
+  account_number TEXT NOT NULL,
+  account_holder TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  instructions TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.payment_accounts ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public Read Payment Accounts" ON public.payment_accounts;
+DROP POLICY IF EXISTS "Service Role Full Access Payment Accounts" ON public.payment_accounts;
+
+CREATE POLICY "Public Read Payment Accounts" ON public.payment_accounts FOR SELECT USING (is_active = true);
+CREATE POLICY "Service Role Full Access Payment Accounts" ON public.payment_accounts FOR ALL USING (auth.role() = 'service_role');
+
+INSERT INTO public.payment_accounts (id, provider, account_number, account_holder, is_active, instructions)
+VALUES 
+  ('zaincash_main', 'zaincash', '07801459424', 'محفظة زين كاش المعتمدة', true, 'التحويل المباشر من تطبيق زين كاش إلى رقم المحفظة ثم إرفاق صورة الوصل'),
+  ('mastercard_main', 'mastercard', '4538548308', 'حساب ماستر كارد المعتمد', true, 'التحويل إلى رقم حساب الماستر كارد الموضح ثم إرفاق صورة الوصل')
+ON CONFLICT (id) DO UPDATE SET 
+  account_number = EXCLUDED.account_number,
+  account_holder = EXCLUDED.account_holder,
+  instructions = EXCLUDED.instructions;
+

@@ -24,6 +24,7 @@ import {
   Database,
   Upload,
   Megaphone,
+  MessageCircle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '../context/WalletContext';
@@ -79,10 +80,14 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   // Navigation & Sub-tabs
   const [activeTab, setActiveTab] = useState<'stores' | 'import' | 'claims' | 'reports' | 'ads' | 'broadcast' | 'security'>('stores');
 
-  // Manager Login State (Phone + Username + Password)
-  const [loginPhone, setLoginPhone] = useState('');
-  const [loginUsername, setLoginUsername] = useState('');
+  // Manager Login State (Phone + Username + Password + WhatsApp OTP)
+  const [loginPhone, setLoginPhone] = useState('07801459424');
+  const [loginUsername, setLoginUsername] = useState('asamali');
   const [loginPassword, setLoginPassword] = useState('');
+  const [whatsappOtp, setWhatsappOtp] = useState('');
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpSuccessMsg, setOtpSuccessMsg] = useState('');
   const [loginError, setLoginError] = useState('');
 
   // Store Management State
@@ -118,9 +123,34 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   const [securitySuccessMsg, setSecuritySuccessMsg] = useState('');
   const [securityErrorMsg, setSecurityErrorMsg] = useState('');
 
-  if (!isOpen) return null;
+  // Handle Request WhatsApp OTP
+  const handleRequestWhatsappOtp = async () => {
+    setOtpLoading(true);
+    setLoginError('');
+    try {
+      const resp = await safeApiFetch('/api/admin/request-whatsapp-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: loginPhone.trim() || '07801459424' }),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setIsOtpSent(true);
+        setOtpSuccessMsg('تم إرسال رمز التحقق إلى واتساب المدير (07801459424). يرجى إدخال الرمز لتأكيد الدخول.');
+        if (data.whatsappUrl) {
+          window.open(data.whatsappUrl, '_blank');
+        }
+      } else {
+        setLoginError(data.error || 'فشل إرسال رسالة التأكيد عبر واتساب.');
+      }
+    } catch {
+      setLoginError('تعذر الاتصال بخادم إرسال رسائل الواتساب.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
-  // Handle Manager Login (Phone + Username + Password)
+  // Handle Manager Login (Phone + Username + Password + WhatsApp OTP)
   const handleManagerLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
@@ -133,15 +163,18 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
           username: loginUsername.trim(),
           password: loginPassword.trim(),
           phone: loginPhone.trim(),
+          whatsappOtp: whatsappOtp.trim() || undefined,
         }),
       });
       const data = await resp.json();
       if (resp.ok && data.success && data.token) {
         sessionStorage.setItem('iraq_admin_token', data.token);
         loginManager(loginPhone, loginUsername);
-        setLoginPhone('');
-        setLoginUsername('');
+        setLoginPhone('07801459424');
+        setLoginUsername('asamali');
         setLoginPassword('');
+        setWhatsappOtp('');
+        setIsOtpSent(false);
         confetti({ particleCount: 50, spread: 70 });
         return;
       } else {
@@ -390,7 +423,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                     required
                     value={loginPhone}
                     onChange={(e) => setLoginPhone(e.target.value)}
-                    placeholder="مثال: 07801234567"
+                    placeholder="07801459424"
                     className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono font-bold text-white focus:border-red-500 focus:outline-none"
                     dir="ltr"
                   />
@@ -409,7 +442,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                     required
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
-                    placeholder="مثال: admin"
+                    placeholder="asamali"
                     className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-semibold text-white focus:border-red-500 focus:outline-none"
                   />
                 </div>
@@ -427,10 +460,50 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                     required
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="AsamasaM12"
                     className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono text-white focus:border-red-500 focus:outline-none"
                   />
                 </div>
+              </div>
+
+              {/* WhatsApp Confirmation Trigger */}
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5">
+                    <MessageCircle className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>تأكيد تسجيل الدخول عبر واتساب:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleRequestWhatsappOtp}
+                    disabled={otpLoading}
+                    className="rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {otpLoading ? 'جاري الإرسال...' : isOtpSent ? 'إعادة الإرسال' : 'إرسال رسالة تأكيد للواتساب'}
+                  </button>
+                </div>
+
+                {otpSuccessMsg && (
+                  <p className="text-[10px] text-emerald-200/90 leading-relaxed">
+                    {otpSuccessMsg}
+                  </p>
+                )}
+
+                {isOtpSent && (
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      رمز التحقق المرسل إلى الواتساب:
+                    </label>
+                    <input
+                      type="text"
+                      value={whatsappOtp}
+                      onChange={(e) => setWhatsappOtp(e.target.value)}
+                      placeholder="أدخل الرمز المكون من 6 أرقام"
+                      dir="ltr"
+                      className="w-full rounded-xl border border-emerald-500/40 bg-slate-800/90 py-2 px-3 text-xs font-mono font-bold text-emerald-300 focus:border-emerald-400 focus:outline-none text-center"
+                    />
+                  </div>
+                )}
               </div>
 
               {loginError && (
@@ -446,7 +519,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                 className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 py-3.5 font-display text-sm font-bold text-white shadow-lg hover:from-red-700 hover:to-rose-700 active:scale-95 transition-all cursor-pointer"
               >
                 <Unlock className="h-4 w-4" />
-                <span>دخول المدير وتفعيل صلاحيات المحفظة والحذف</span>
+                <span>دخول المدير وتفعيل صلاحيات الحذف والنشر</span>
               </button>
             </form>
           </div>

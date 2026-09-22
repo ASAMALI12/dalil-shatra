@@ -191,6 +191,7 @@ export interface CategoryAd {
   headline: string;
   description: string;
   imageUrl?: string;
+  images?: string[]; // Up to 5 store/ad images
   phone: string;
   whatsapp?: string;
   offerBadge?: string;
@@ -201,4 +202,16 @@ export interface CategoryAd {
   paymentMethod: string;
   transactionId?: string;
   referenceNumber: string;
+  status?: 'pending_approval' | 'active' | 'rejected';
+  receiptImage?: string; // Uploaded payment proof
+  aiStyle?: {
+    fontSize?: 'sm' | 'md' | 'lg' | 'xl' | 'small' | 'medium' | 'large' | 'huge' | string;
+    textColor?: string;
+    bgColor?: string;
+    bgStyle?: string;
+    isAnimated?: boolean;
+    animation?: string;
+    fontScale?: number;
+  };
+  managerNotes?: string;
 }

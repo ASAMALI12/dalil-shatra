@@ -89,7 +89,7 @@ function IraqDirectoryApp() {
   const [isNewsOpen, setIsNewsOpen] = useState(false);
   const [isManagerDashboardOpen, setIsManagerDashboardOpen] = useState(false);
 
-  // Hidden 25-click trigger for manager login on the "دليل العراق" title
+  // Hidden 27-click trigger for manager login on the "دليل العراق" title
   const managerTapTimerRef = useRef<any>(null);
   const [managerTapCount, setManagerTapCount] = useState(0);
 
@@ -101,14 +101,14 @@ function IraqDirectoryApp() {
     }
 
     const nextCount = managerTapCount + 1;
-    if (nextCount >= 25) {
+    if (nextCount >= 27) {
       setManagerTapCount(0);
       setIsManagerDashboardOpen(true);
     } else {
       setManagerTapCount(nextCount);
       managerTapTimerRef.current = setTimeout(() => {
         setManagerTapCount(0);
-      }, 3500);
+      }, 4000);
     }
   };
 

@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { CategoryAd } from '../types/shatrah';
 import { supabase, getIsSupabaseConfigured } from '../lib/supabase';
 import { apiFetch } from '../utils/apiClient';
 
 interface CategoryAdsContextType {
   ads: CategoryAd[];
+  pendingAds: CategoryAd[];
   isLoading: boolean;
   getAdsForCategory: (governorateId: string, districtId: string, categoryId: string) => CategoryAd[];
   getNationalAds: () => CategoryAd[];
@@ -12,6 +13,11 @@ interface CategoryAdsContextType {
   addCategoryAd: (
     newAd: Omit<CategoryAd, 'id' | 'createdAt' | 'expiresAt' | 'referenceNumber'>
   ) => CategoryAd;
+  submitAdForApproval: (
+    newAd: Omit<CategoryAd, 'id' | 'createdAt' | 'expiresAt' | 'referenceNumber' | 'status'>
+  ) => CategoryAd;
+  approveAndPublishAd: (id: string) => Promise<boolean>;
+  rejectAd: (id: string, reason?: string) => Promise<boolean>;
   deleteCategoryAd: (id: string) => void;
   renewCategoryAd: (id: string, additionalDays: number) => void;
   refreshAds: () => Promise<void>;
@@ -33,6 +39,11 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Pending ads for manager review
+  const pendingAds = useMemo(() => {
+    return ads.filter((a) => a.status === 'pending_approval');
+  }, [ads]);
+
   // Fetch real ads from Supabase or server API
   const refreshAds = useCallback(async () => {
     setIsLoading(true);
@@ -41,7 +52,6 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         const { data, error } = await supabase
           .from('advertisements')
           .select('*')
-          .eq('is_active', true)
           .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
@@ -58,6 +68,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             headline: d.title,
             description: d.description || '',
             imageUrl: d.image_url,
+            images: Array.isArray(d.images) ? d.images : d.image_url ? [d.image_url] : [],
             phone: d.phone || '',
             whatsapp: d.whatsapp || undefined,
             offerBadge: d.badge || undefined,
@@ -67,6 +78,9 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             expiresAt: d.expires_at ? new Date(d.expires_at).getTime() : Date.now() + 5 * 24 * 3600 * 1000,
             paymentMethod: d.payment_method || 'زين كاش',
             referenceNumber: d.reference_number || `AD-${d.id.slice(0, 6)}`,
+            status: d.status || (d.is_active ? 'active' : 'pending_approval'),
+            receiptImage: d.receipt_url || d.receipt_image || undefined,
+            aiStyle: d.ai_style || undefined,
           }));
 
           setAds(mappedAds);
@@ -94,6 +108,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
           headline: d.title,
           description: d.description || '',
           imageUrl: d.image_url,
+          images: Array.isArray(d.images) ? d.images : d.image_url ? [d.image_url] : [],
           phone: d.phone || '',
           whatsapp: d.whatsapp || undefined,
           offerBadge: d.badge || undefined,
@@ -103,6 +118,9 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
           expiresAt: d.expires_at ? new Date(d.expires_at).getTime() : Date.now() + 5 * 24 * 3600 * 1000,
           paymentMethod: d.payment_method || 'زين كاش',
           referenceNumber: d.reference_number || `AD-${d.id.slice(0, 6)}`,
+          status: d.status || (d.is_active ? 'active' : 'pending_approval'),
+          receiptImage: d.receipt_url || d.receipt_image || undefined,
+          aiStyle: d.ai_style || undefined,
         }));
         setAds(mappedAds);
         try {
@@ -127,6 +145,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
   ): CategoryAd[] => {
     const now = Date.now();
     return ads.filter((ad) => {
+      if (ad.status && ad.status !== 'active') return false;
       if (ad.expiresAt && ad.expiresAt < now) return false;
       if (ad.categoryId !== categoryId && ad.categoryId !== 'all') return false;
 
@@ -148,6 +167,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const now = Date.now();
     return ads.filter(
       (ad) =>
+        (ad.status === 'active' || !ad.status) &&
         (!ad.expiresAt || ad.expiresAt >= now) &&
         (ad.scope === 'national' || ad.governorateId === 'all')
     );
@@ -157,6 +177,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const now = Date.now();
     return ads.filter(
       (ad) =>
+        (ad.status === 'active' || !ad.status) &&
         (!ad.expiresAt || ad.expiresAt >= now) &&
         (ad.scope === 'governorate' || (!ad.scope && ad.districtId === 'all')) &&
         (ad.governorateId === governorateId || ad.governorateId === 'all')
@@ -177,6 +198,100 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     );
   };
 
+  // Submit ad for approval (status: pending_approval)
+  const submitAdForApproval = (
+    newAdData: Omit<CategoryAd, 'id' | 'createdAt' | 'expiresAt' | 'referenceNumber' | 'status'>
+  ): CategoryAd => {
+    const now = Date.now();
+    const durationMs = (newAdData.durationDays || 1) * 24 * 3600 * 1000;
+    const refNum = `AD-${(newAdData.districtId || 'IQ').slice(0, 4).toUpperCase()}-${Math.floor(
+      1000 + Math.random() * 9000
+    )}`;
+
+    const createdAd: CategoryAd = {
+      ...newAdData,
+      id: `cad-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdAt: now,
+      expiresAt: now + durationMs,
+      referenceNumber: refNum,
+      status: 'pending_approval',
+    };
+
+    setAds((prev) => [createdAd, ...prev]);
+
+    // Save to Supabase with is_active = false
+    if (getIsSupabaseConfigured() && supabase) {
+      (async () => {
+        try {
+          await supabase.from('advertisements').insert({
+            id: createdAd.id,
+            title: createdAd.headline || createdAd.businessName,
+            description: createdAd.description,
+            image_url: createdAd.imageUrl || (createdAd.images?.[0] ?? null),
+            images: createdAd.images || [],
+            placement: createdAd.scope === 'national' ? 'national' : createdAd.scope === 'governorate' ? 'governorate' : 'banner',
+            target_governorate_id: createdAd.governorateId,
+            target_district_id: createdAd.districtId,
+            is_active: false,
+            status: 'pending_approval',
+            phone: createdAd.phone,
+            whatsapp: createdAd.whatsapp,
+            badge: createdAd.offerBadge,
+            price: createdAd.price,
+            duration_days: createdAd.durationDays,
+            payment_method: createdAd.paymentMethod,
+            reference_number: createdAd.referenceNumber,
+            receipt_url: createdAd.receiptImage,
+            ai_style: createdAd.aiStyle,
+            created_at: new Date(now).toISOString(),
+          });
+        } catch (err) {
+          console.warn('Failed to save ad in Supabase:', err);
+        }
+      })();
+    }
+
+    return createdAd;
+  };
+
+  // Manager Approve & Publish
+  const approveAndPublishAd = async (id: string): Promise<boolean> => {
+    setAds((prev) =>
+      prev.map((ad) => (ad.id === id ? { ...ad, status: 'active' } : ad))
+    );
+
+    if (getIsSupabaseConfigured() && supabase) {
+      try {
+        await supabase
+          .from('advertisements')
+          .update({ is_active: true, status: 'active' })
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Failed to update ad status in Supabase:', err);
+      }
+    }
+    return true;
+  };
+
+  // Manager Reject
+  const rejectAd = async (id: string, reason?: string): Promise<boolean> => {
+    setAds((prev) =>
+      prev.map((ad) => (ad.id === id ? { ...ad, status: 'rejected', managerNotes: reason } : ad))
+    );
+
+    if (getIsSupabaseConfigured() && supabase) {
+      try {
+        await supabase
+          .from('advertisements')
+          .update({ is_active: false, status: 'rejected' })
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Failed to reject ad in Supabase:', err);
+      }
+    }
+    return true;
+  };
+
   const addCategoryAd = (
     newAdData: Omit<CategoryAd, 'id' | 'createdAt' | 'expiresAt' | 'referenceNumber'>
   ): CategoryAd => {
@@ -192,6 +307,7 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       createdAt: now,
       expiresAt: now + durationMs,
       referenceNumber: refNum,
+      status: newAdData.status || 'active',
     };
 
     setAds((prev) => [createdAd, ...prev]);
@@ -204,11 +320,19 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             id: createdAd.id,
             title: createdAd.headline || createdAd.businessName,
             description: createdAd.description,
-            image_url: createdAd.imageUrl,
+            image_url: createdAd.imageUrl || (createdAd.images?.[0] ?? null),
             placement: createdAd.scope === 'national' ? 'national' : createdAd.scope === 'governorate' ? 'governorate' : 'banner',
             target_governorate_id: createdAd.governorateId,
             target_district_id: createdAd.districtId,
-            is_active: true,
+            is_active: createdAd.status === 'active',
+            status: createdAd.status,
+            phone: createdAd.phone,
+            whatsapp: createdAd.whatsapp,
+            badge: createdAd.offerBadge,
+            price: createdAd.price,
+            duration_days: createdAd.durationDays,
+            payment_method: createdAd.paymentMethod,
+            reference_number: createdAd.referenceNumber,
             created_at: new Date(now).toISOString(),
           });
         } catch (err) {
@@ -237,11 +361,15 @@ export const CategoryAdsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     <CategoryAdsContext.Provider
       value={{
         ads,
+        pendingAds,
         isLoading,
         getAdsForCategory,
         getNationalAds,
         getGovernorateAds,
         addCategoryAd,
+        submitAdForApproval,
+        approveAndPublishAd,
+        rejectAd,
         deleteCategoryAd,
         renewCategoryAd,
         refreshAds,
