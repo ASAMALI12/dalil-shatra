@@ -20,21 +20,25 @@ export const ManagerClaimsTab: React.FC = () => {
   const [claimsList, setClaimsList] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [actionNotice, setActionNotice] = useState('');
+  const [revokingStoreId, setRevokingStoreId] = useState<string | null>(null);
 
-  // Collect claimed stores from items
-  const claimedStores = items.filter(
-    (i) => i.isClaimed || i.claimStatus === 'verified' || i.claimedByName
+  // Collect claimed stores from items safely
+  const claimedStores = (Array.isArray(items) ? items : []).filter(
+    (i) => i && (i.isClaimed || i.claimStatus === 'verified' || i.claimedByName)
   );
 
   const fetchClaimsFromBackend = async () => {
     setIsLoading(true);
     try {
-      const adminToken = sessionStorage.getItem('iraq_admin_token') || '';
+      let adminToken = '';
+      try {
+        adminToken = sessionStorage.getItem('iraq_admin_token') || localStorage.getItem('iraq_admin_token') || '';
+      } catch {}
       const resp = await safeApiFetch('/api/admin/claims', {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
-      const data = await resp.json();
-      if (resp.ok && Array.isArray(data.claims)) {
+      const data = resp.data || (typeof resp.json === 'function' ? await resp.json() : null);
+      if (resp.ok && Array.isArray(data?.claims)) {
         setClaimsList(data.claims);
       }
     } catch {
@@ -49,11 +53,10 @@ export const ManagerClaimsTab: React.FC = () => {
   }, []);
 
   const handleRevokeClaim = (store: DirectoryItem) => {
-    if (confirm(`هل أنت متأكد من إلغاء توثيق ملكية متجر "${store.name}"؟`)) {
-      unclaimStore(store.id);
-      setActionNotice(`تم إلغاء توثيق متجر "${store.name}" بنجاح وإعادته كمتجر غير مطالب به.`);
-      setTimeout(() => setActionNotice(''), 4000);
-    }
+    unclaimStore(store.id);
+    setRevokingStoreId(null);
+    setActionNotice(`تم إلغاء توثيق متجر "${store.name}" بنجاح وإعادته كمتجر غير مطالب به.`);
+    setTimeout(() => setActionNotice(''), 4000);
   };
 
   return (
@@ -142,13 +145,32 @@ export const ManagerClaimsTab: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => handleRevokeClaim(store)}
-                  className="rounded-xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer"
-                >
-                  إلغاء التوثيق
-                </button>
+                {revokingStoreId === store.id ? (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleRevokeClaim(store)}
+                      className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      تأكيد إلغاء التوثيق
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRevokingStoreId(null)}
+                      className="rounded-xl bg-slate-800 text-slate-300 hover:text-white px-2 py-1.5 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      تراجع
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setRevokingStoreId(store.id)}
+                    className="rounded-xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-500/30 text-rose-300 px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    إلغاء التوثيق
+                  </button>
+                )}
               </div>
             </div>
           ))}

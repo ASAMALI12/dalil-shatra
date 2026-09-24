@@ -47,13 +47,26 @@ const CACHE_KEY = 'iraq_supabase_cache';
 export const DirectoryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Sanitize helper ensuring all valid stores are kept and have valid telephone contact
   const sanitizeItems = (rawItems: DirectoryItem[]): DirectoryItem[] => {
-    return rawItems.filter(
-      (item) =>
-        item &&
-        typeof item.name === 'string' &&
-        item.name.trim().length > 0 &&
-        Boolean(item.phone && item.phone.trim().length >= 6)
-    );
+    return rawItems
+      .filter(
+        (item) =>
+          item &&
+          typeof item.name === 'string' &&
+          item.name.trim().length > 0 &&
+          Boolean(item.phone && item.phone.trim().length >= 6)
+      )
+      .map((item) => {
+        // If the store is not claimed/verified by its real owner, ensure no legacy synthetic address, description, or menu is present
+        if (!item.isClaimed && item.claimStatus !== 'verified') {
+          return {
+            ...item,
+            address: '',
+            description: '',
+            menu: [],
+          };
+        }
+        return item;
+      });
   };
 
   const [isSupabaseLoading, setIsSupabaseLoading] = useState<boolean>(true);

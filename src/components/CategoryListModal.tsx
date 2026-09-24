@@ -62,10 +62,10 @@ export const CategoryListModal: React.FC<CategoryListModalProps> = ({
       list = list.filter(
         (i) =>
           i.name.toLowerCase().includes(q) ||
-          i.description.toLowerCase().includes(q) ||
-          i.address.toLowerCase().includes(q) ||
-          i.subCategory?.toLowerCase().includes(q) ||
-          i.tags?.some((t) => t.toLowerCase().includes(q))
+          (i.description?.toLowerCase().includes(q) ?? false) ||
+          (i.address?.toLowerCase().includes(q) ?? false) ||
+          (i.subCategory?.toLowerCase().includes(q) ?? false) ||
+          (i.tags?.some((t) => t.toLowerCase().includes(q)) ?? false)
       );
     }
 

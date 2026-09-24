@@ -13,6 +13,7 @@ export const InstallAppPromptModal: React.FC<InstallAppPromptModalProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
+  const [manualGuide, setManualGuide] = useState<'ios' | 'android' | null>(null);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -45,13 +46,9 @@ export const InstallAppPromptModal: React.FC<InstallAppPromptModalProps> = ({
         setDeferredPrompt(null);
       }
     } else {
-      // Fallback instructions for Android / iPhone
+      // In-modal guide for Android / iPhone
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      if (isIOS) {
-        alert('لتثبيت التطبيق على جهازك: اضغط على زر المشاركة (Share) في المتصفح ثم اختر "إضافة إلى الشاشة الرئيسية" (Add to Home Screen)');
-      } else {
-        alert('لتثبيت تطبيق دليل العراق: اضغط على قائمة المتصفح (⋮) أعلى الشاشة واختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية"');
-      }
+      setManualGuide(isIOS ? 'ios' : 'android');
     }
   };
 
@@ -106,6 +103,28 @@ export const InstallAppPromptModal: React.FC<InstallAppPromptModalProps> = ({
             <span>يعمل كتطبيق أندرويد وآيفون كامل ومستقل</span>
           </div>
         </div>
+
+        {/* Manual Step-by-Step Guide for iOS / Android */}
+        {manualGuide && (
+          <div className="my-3 rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-right text-xs text-amber-900 animate-in fade-in space-y-1.5">
+            <span className="font-bold block">
+              {manualGuide === 'ios' ? 'طريقة تثبيت التطبيق على الآيفون (iOS):' : 'طريقة تثبيت التطبيق على الأندرويد:'}
+            </span>
+            {manualGuide === 'ios' ? (
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-800">
+                <li>اضغط على زر المشاركة <strong>(Share / سهم للأعلى)</strong> أسفل شاشة المتصفح.</li>
+                <li>مرر للأسفل واختر <strong>«إضافة إلى الشاشة الرئيسية» (Add to Home Screen)</strong>.</li>
+                <li>اضغط على <strong>«إضافة» (Add)</strong> في الأعلى ليظهر التطبيق في شاشتك كأي تطبيق عادي.</li>
+              </ol>
+            ) : (
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-800">
+                <li>اضغط على قائمة المتصفح <strong>(⋮ الثلاث نقاط)</strong> أعلى زاوية الشاشة.</li>
+                <li>اختر <strong>«تثبيت التطبيق» (Install app)</strong> أو <strong>«إضافة إلى الشاشة الرئيسية»</strong>.</li>
+                <li>أكد التثبيت وسيصبح التطبيق متاحاً على شاشتك الرئيسية مباشرة.</li>
+              </ol>
+            )}
+          </div>
+        )}
 
         {/* Primary CTA Button: Download / Install App */}
         <button

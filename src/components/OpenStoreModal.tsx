@@ -23,7 +23,7 @@ import confetti from 'canvas-confetti';
 import { useDirectory } from '../context/DirectoryContext';
 import { useNotification } from '../context/NotificationContext';
 import { useLocation } from '../context/LocationContext';
-import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
+import { IRAQ_GOVERNORATES, DISTRICT_COORDINATES } from '../data/iraqLocations';
 import { DirectoryItem } from '../types/shatrah';
 import { validateIraqPhone, normalizeIraqPhone } from '../utils/iraqPhoneValidator';
 
@@ -78,6 +78,7 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
   }, [governorateId, availableDistricts, districtId]);
 
   // WhatsApp OTP Verification state
+  const [stepFormError, setStepFormError] = useState<string>('');
   const [generatedOtp, setGeneratedOtp] = useState<string>('');
   const [otpInput, setOtpInput] = useState<string>('');
   const [otpError, setOtpError] = useState<string>('');
@@ -110,23 +111,24 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
   // Step 1 -> Step 2: Send OTP via WhatsApp
   const handleProceedToVerification = (e: React.FormEvent) => {
     e.preventDefault();
+    setStepFormError('');
 
     if (!ownerName.trim()) {
-      alert('يرجى كتابة اسم صاحب المتجر أو التاجر');
+      setStepFormError('يرجى كتابة اسم صاحب المتجر أو التاجر');
       return;
     }
     if (!storeName.trim()) {
-      alert('يرجى كتابة اسم المتجر / المحل');
+      setStepFormError('يرجى كتابة اسم المتجر / المحل');
       return;
     }
     if (!phone.trim()) {
-      alert('يرجى إدخال رقم هاتف عراقي للتواصل وتوثيق الواتساب');
+      setStepFormError('يرجى إدخال رقم هاتف عراقي للتواصل وتوثيق الواتساب');
       return;
     }
 
     const phoneCheck = validateIraqPhone(phone);
     if (!phoneCheck.isValid) {
-      alert(`رقم الهاتف غير صالح: ${phoneCheck.reason}\nيجب إدخال رقم هاتف عراقي حقيقي لشبكات زين، آسيا سيل، أو كورك.`);
+      setStepFormError(`رقم الهاتف غير صالح: ${phoneCheck.reason}. يجب إدخال رقم هاتف عراقي حقيقي لشبكات زين، آسيا سيل، أو كورك.`);
       return;
     }
 
@@ -135,6 +137,7 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
     setGeneratedOtp(code);
     setOtpInput('');
     setOtpError('');
+    setStepFormError('');
     setResendTimer(60);
     setIsSendingOtp(true);
     setStep('verify');
@@ -178,6 +181,9 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
 
     const gov = IRAQ_GOVERNORATES.find((g) => g.id === governorateId);
     const dist = gov?.districts.find((d) => d.id === districtId);
+    const districtCoords = districtId ? DISTRICT_COORDINATES[districtId] : undefined;
+    const initialLat = districtCoords?.lat ?? gov?.center.lat;
+    const initialLng = districtCoords?.lng ?? gov?.center.lng;
 
     const newStoreItem: DirectoryItem = {
       id: `store-${Date.now()}`,
@@ -190,14 +196,16 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
       districtId: districtId,
       governorateName: gov?.name || 'بغداد',
       districtName: dist?.name || 'الكرخ',
-      address: address.trim() || `${dist?.name || 'المركز'} - ${gov?.name || 'العراق'}`,
+      address: address.trim(),
+      lat: initialLat,
+      lng: initialLng,
       rating: null,
       reviewsCount: 0,
       isOpen: true,
       workingHours: workingHours.trim() || '9:00 ص - 10:00 م',
       imageUrl: selectedImage,
       images: [selectedImage],
-      description: description.trim() || `متجر موثق لصاحبه ${ownerName}، مسجل رسمياً في دليل العراق.`,
+      description: description.trim(),
       tags: ['متجر جديد', 'موثق واتساب', ownerName, storeName, gov?.name || '', dist?.name || ''],
       isClaimed: true,
       claimStatus: 'verified',
@@ -420,13 +428,13 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
 
                 <div>
                   <label className="mb-1 block font-display text-xs font-bold text-slate-700">
-                    التخصص الدقيق أو النشاط
+                    نوع الأكلات / الألبسة / اختصاص العيادة أو النشاط 🏷️
                   </label>
                   <input
                     type="text"
                     value={subCategory}
                     onChange={(e) => setSubCategory(e.target.value)}
-                    placeholder="مثال: مشاوي، ملابس رجالية، صيدلية..."
+                    placeholder="مثال: مشاوي ومأكولات / أزياء رجالية / عيادة أسنان / سوبرماركت..."
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
                   />
                 </div>
@@ -470,13 +478,13 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
               {/* 5. Store Description */}
               <div>
                 <label className="mb-1 block font-display text-xs font-bold text-slate-700">
-                  نبذة عن خدمات ومنتجات المتجر
+                  النبذة التعريفية للمتجر (نوع السلع، الأكلات، الألبسة أو الخدمات) 📝
                 </label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="اكتب أهم العروض أو الخدمات التي يقدمها محلك لأهالي الشطرة..."
+                  placeholder="اكتب نبذة تعريفية توضح أكلات المطعم، سلع المحل، أو تخصص العيادة بدقة لزبائنك..."
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:bg-white focus:outline-none resize-none"
                 />
               </div>
@@ -512,6 +520,14 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
                 </div>
               </div>
 
+              {/* Error Banner */}
+              {stepFormError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-right text-xs font-semibold text-rose-700 animate-in fade-in flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                  <p>{stepFormError}</p>
+                </div>
+              )}
+
               {/* Submit CTA */}
               <button
                 type="submit"
@@ -545,32 +561,23 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
                   </div>
 
                   <p className="text-xs text-emerald-800 leading-relaxed">
-                    مرحباً بك <strong>{ownerName}</strong>، كود توثيق وتأكيد فتح متجر <strong>"{storeName}"</strong> في دليل الشطرة هو:
+                    مرحباً بك <strong>{ownerName}</strong>، تم إرسال كود التوثيق الخاص بمتجر <strong>"{storeName}"</strong> في رسالة خاصة إلى تطبيق الواتساب.
                   </p>
 
                   <div className="mt-2.5 flex items-center justify-between rounded-xl bg-white p-2.5 border border-emerald-200">
-                    <span className="font-mono text-xl sm:text-2xl font-extrabold tracking-widest text-emerald-700">
-                      {generatedOtp}
+                    <span className="text-xs text-slate-600 font-medium">
+                      🔒 الرمز سري للغاية ويصل إلى هاتفك عبر الواتساب
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setOtpInput(generatedOtp)}
-                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer"
+                    <a
+                      href={`https://wa.me/964${phone.replace(/^0/, '')}?text=${encodeURIComponent(`كود التحقق لدليل العراق: ${generatedOtp}`)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1"
                     >
-                      إدخال تلقائي للكود ⚡
-                    </button>
+                      <span>فتح الواتساب لاستلام الرمز 💬</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
                   </div>
-
-                  {/* Direct WhatsApp External Launch */}
-                  <a
-                    href={`https://wa.me/964${phone.replace(/^0/, '')}?text=${encodeURIComponent(`كود التحقق لدليل العراق: ${generatedOtp}`)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-2.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 hover:underline"
-                  >
-                    <span>فتح محادثة الواتساب الرسمية</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
                 </div>
               )}
 

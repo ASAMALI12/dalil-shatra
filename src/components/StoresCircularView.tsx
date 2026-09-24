@@ -17,13 +17,17 @@ import {
   Plus,
   ArrowRight,
   ChevronLeft,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
+import { useWallet } from '../context/WalletContext';
 import { useCategoryAds } from '../context/CategoryAdsContext';
 import { AddCommunityPostModal } from './AddCommunityPostModal';
 import { DistrictEmergencySection } from './DistrictEmergencySection';
 import { StoreCategoryAnimatedAdBanner } from './StoreCategoryAnimatedAdBanner';
+import { CategoryVipAdBanner } from './CategoryVipAdBanner';
 import { openExternalUrl, openSocialMediaLink } from '../utils/socialLinks';
 import { getStoreCanonicalCategory } from '../utils/categoryMatcher';
 
@@ -39,6 +43,7 @@ interface StoresCircularViewProps {
   onSelectItem: (item: DirectoryItem) => void;
   onClaimStore: (store: DirectoryItem) => void;
   onOpenStoreModal: () => void;
+  onEditStore?: (store: DirectoryItem) => void;
 }
 
 export interface CircularCategory {
@@ -240,6 +245,28 @@ export const CIRCULAR_CATEGORIES: CircularCategory[] = [
       'فحص سيارات',
     ],
   },
+  {
+    id: 'other',
+    title: 'أنشطة ومتاجر أخرى',
+    shortTitle: 'غير ذلك',
+    icon: '✨',
+    colorClass: 'bg-slate-700 hover:bg-slate-800 text-white shadow-slate-300',
+    searchPlaceholder: 'بحث في الأنشطة والمتاجر والخدمات المتنوعة...',
+    addLabel: '+ أضف إعلانك أو نشاطك',
+    tagsMatch: [
+      'أخرى',
+      'متنوع',
+      'غير ذلك',
+      'عام',
+      'نشاط',
+      'مكتب',
+      'شركة',
+      'معمل',
+      'مقاولات',
+      'عقارات',
+      'other',
+    ],
+  },
   // SPECIAL USER-REQUESTED CATEGORIES:
   {
     id: 'used-goods',
@@ -319,8 +346,11 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
   onSelectItem,
   onClaimStore,
   onOpenStoreModal,
+  onEditStore,
 }) => {
-  const { items } = useDirectory();
+  const { items, deleteStore, updateStore, unclaimStore } = useDirectory();
+  const { isManagerUnlocked } = useWallet();
+  const [deletingStoreId, setDeletingStoreId] = useState<string | null>(null);
   const { getAdsForCategory } = useCategoryAds();
   const [searchQuery, setSearchQuery] = useState('');
   const [jobFilter, setJobFilter] = useState<'all' | 'employer' | 'seeker'>('all');
@@ -489,6 +519,10 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
         {/* المربع الإعلاني لصفحة المتاجر والأقسام بسعر 10 آلاف دينار مع انيميشن ملكي جذاب */}
         <StoreCategoryAnimatedAdBanner
           categoryTitle={districtName && districtName !== 'all' ? districtName : governorateName}
+          governorateId={governorateId}
+          governorateName={governorateName}
+          districtId={districtId}
+          districtName={districtName}
           onOpenClaimStoreModal={onClaimStore}
         />
 
@@ -594,6 +628,33 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
         </div>
       </div>
 
+      {/* Manager Category Superadmin Banner */}
+      {isManagerUnlocked && (
+        <div className="flex items-center justify-between bg-amber-500/15 border-2 border-amber-500/50 rounded-2xl p-2.5 sm:p-3 text-xs shadow-xs gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-slate-950 font-black text-xs shadow-xs">
+              👑
+            </span>
+            <div>
+              <span className="font-display text-xs font-black text-amber-950 block">
+                وضع المدير العام مفعّل في قسم {activeCategory.title}
+              </span>
+              <span className="text-[10px] text-amber-900 font-medium">
+                لديك الصلاحية الكاملة لتعديل أو حذف أو توثيق أي نشاط، أو إضافة نشاط جديد
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="flex items-center gap-1 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 px-2.5 py-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 flex-shrink-0"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>إضافة نشاط</span>
+          </button>
+        </div>
+      )}
+
       {/* DEDICATED SEARCH BAR INSIDE CATEGORY */}
       <div className="relative rounded-2xl border border-slate-200/90 bg-white p-1.5 shadow-2xs">
         <div className="relative flex items-center">
@@ -653,9 +714,31 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
         </div>
       )}
 
+      {/* إذا كان هناك إعلانات VIP نشطة لهذا القسم، تظهر اللوحة الإعلانية الرسمية الدوارة في الصدارة */}
+      {activeCategoryAds.length > 0 && (
+        <div className="mb-2">
+          <CategoryVipAdBanner
+            ads={activeCategoryAds}
+            districtName={districtName && districtName !== 'all' ? districtName : governorateName}
+            categoryName={activeCategory.title}
+            categoryIcon={activeCategory.icon}
+            onOpenBookingModal={() => {}}
+            onSelectStorePhone={(phone) => {
+              const matched = filteredStores.find((s) => s.phone === phone);
+              if (matched) onSelectItem(matched);
+            }}
+          />
+        </div>
+      )}
+
       {/* المربع الإعلاني لصفحة المتاجر والأقسام بسعر 10 آلاف دينار مع انيميشن ملكي جذاب */}
       <StoreCategoryAnimatedAdBanner
         categoryTitle={activeCategory.title}
+        categoryId={activeCategory.id}
+        governorateId={governorateId}
+        governorateName={governorateName}
+        districtId={districtId}
+        districtName={districtName}
         onOpenClaimStoreModal={onClaimStore}
       />
 
@@ -676,31 +759,144 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
             <div
               key={store.id}
               onClick={() => onSelectItem(store)}
-              className="group relative flex items-center gap-4 rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
+              className="group relative flex flex-col rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
             >
-              {/* Enlarged Store / Restaurant Image */}
-              <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 border border-slate-200/90 shadow-2xs">
-                <img
-                  src={store.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
-                  alt={store.name}
-                  className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
-                  loading="lazy"
-                />
-              </div>
+              <div className="flex items-center gap-4">
+                {/* Enlarged Store / Restaurant Image */}
+                <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 border border-slate-200/90 shadow-2xs">
+                  <img
+                    src={store.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                    alt={store.name}
+                    className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                  {store.isClaimed && (
+                    <span className="absolute top-1.5 right-1.5 rounded-lg bg-emerald-600/90 text-white text-[9px] font-black px-1.5 py-0.5 shadow-xs backdrop-blur-xs">
+                      موثق ✓
+                    </span>
+                  )}
+                </div>
 
-              {/* Restaurant / Store Name - Prominent & Beautiful */}
-              <div className="flex-1 min-w-0 pr-1">
-                <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-sky-700 transition-colors leading-snug line-clamp-2">
-                  {store.name}
-                </h4>
-              </div>
+                {/* Restaurant / Store Name - Prominent & Beautiful */}
+                <div className="flex-1 min-w-0 pr-1">
+                  <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-sky-700 transition-colors leading-snug line-clamp-2">
+                    {store.name}
+                  </h4>
+                  {store.address && store.address.trim().length > 0 ? (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-1 truncate">
+                      <MapPin className="h-3 w-3 text-sky-500 shrink-0" />
+                      <span>{store.address}</span>
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate">
+                      <MapPin className="h-3 w-3 text-slate-300 shrink-0" />
+                      <span>{store.districtName ? `${store.governorateName ? `${store.governorateName} - ` : ''}${store.districtName}` : (store.governorateName || 'العراق')}</span>
+                    </p>
+                  )}
+                  {store.phone && (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 font-mono">
+                      <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span>{store.phone}</span>
+                    </p>
+                  )}
+                </div>
 
-              {/* Left Arrow Icon indicating click to open store profile */}
-              <div className="shrink-0 pl-1">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-sky-50 text-slate-400 group-hover:text-sky-600 transition-all shadow-2xs">
-                  <ChevronLeft className="h-5 w-5" />
+                {/* Left Arrow Icon indicating click to open store profile */}
+                <div className="shrink-0 pl-1">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-sky-50 text-slate-400 group-hover:text-sky-600 transition-all shadow-2xs">
+                    <ChevronLeft className="h-5 w-5" />
+                  </div>
                 </div>
               </div>
+
+              {/* Manager Superadmin Actions on the card directly */}
+              {isManagerUnlocked && (
+                <div
+                  className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {onEditStore && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditStore(store);
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <Edit3 className="h-3 w-3 text-sky-600" />
+                        <span>تعديل</span>
+                      </button>
+                    )}
+
+                    {store.isClaimed || store.claimStatus === 'verified' ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          unclaimStore(store.id);
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <span>إلغاء التوثيق</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateStore(store.id, { isClaimed: true, claimStatus: 'verified', claimedAt: new Date().toISOString() });
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                        <span>توثيق فوري</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    {deletingStoreId === store.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteStore(store.id);
+                            setDeletingStoreId(null);
+                          }}
+                          className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 text-[11px] font-bold cursor-pointer"
+                        >
+                          تأكيد الحذف
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingStoreId(null);
+                          }}
+                          className="rounded-lg bg-slate-200 text-slate-800 px-1.5 py-1 text-[11px] font-bold cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingStoreId(store.id);
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3 text-rose-600" />
+                        <span>حذف كمدير</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -720,31 +916,144 @@ export const StoresCircularView: React.FC<StoresCircularViewProps> = ({
             <div
               key={store.id}
               onClick={() => onSelectItem(store)}
-              className="group relative flex items-center gap-4 rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
+              className="group relative flex flex-col rounded-3xl border border-slate-200/90 bg-white p-3 sm:p-3.5 shadow-2xs hover:shadow-md hover:border-slate-300 transition-all duration-200 cursor-pointer overflow-hidden active:scale-[0.99]"
             >
-              {/* Enlarged Store / Restaurant Image */}
-              <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 border border-slate-200/90 shadow-2xs">
-                <img
-                  src={store.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
-                  alt={store.name}
-                  className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
-                  loading="lazy"
-                />
-              </div>
+              <div className="flex items-center gap-4">
+                {/* Enlarged Store / Restaurant Image */}
+                <div className="relative h-24 w-24 sm:h-28 sm:w-28 flex-shrink-0 overflow-hidden rounded-2xl bg-slate-100 border border-slate-200/90 shadow-2xs">
+                  <img
+                    src={store.imageUrl || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'}
+                    alt={store.name}
+                    className="h-full w-full object-cover group-hover:scale-108 transition-transform duration-300"
+                    loading="lazy"
+                  />
+                  {store.isClaimed && (
+                    <span className="absolute top-1.5 right-1.5 rounded-lg bg-emerald-600/90 text-white text-[9px] font-black px-1.5 py-0.5 shadow-xs backdrop-blur-xs">
+                      موثق ✓
+                    </span>
+                  )}
+                </div>
 
-              {/* Restaurant / Store Name - Prominent & Beautiful */}
-              <div className="flex-1 min-w-0 pr-1">
-                <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-sky-700 transition-colors leading-snug line-clamp-2">
-                  {store.name}
-                </h4>
-              </div>
+                {/* Restaurant / Store Name - Prominent & Beautiful */}
+                <div className="flex-1 min-w-0 pr-1">
+                  <h4 className="font-display text-base sm:text-lg font-black text-slate-900 group-hover:text-sky-700 transition-colors leading-snug line-clamp-2">
+                    {store.name}
+                  </h4>
+                  {store.address && store.address.trim().length > 0 ? (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-1 truncate">
+                      <MapPin className="h-3 w-3 text-sky-500 shrink-0" />
+                      <span>{store.address}</span>
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-1 truncate">
+                      <MapPin className="h-3 w-3 text-slate-300 shrink-0" />
+                      <span>{store.districtName ? `${store.governorateName ? `${store.governorateName} - ` : ''}${store.districtName}` : (store.governorateName || 'العراق')}</span>
+                    </p>
+                  )}
+                  {store.phone && (
+                    <p className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 font-mono">
+                      <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span>{store.phone}</span>
+                    </p>
+                  )}
+                </div>
 
-              {/* Left Arrow Icon indicating click to open store profile */}
-              <div className="shrink-0 pl-1">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-sky-50 text-slate-400 group-hover:text-sky-600 transition-all shadow-2xs">
-                  <ChevronLeft className="h-5 w-5" />
+                {/* Left Arrow Icon indicating click to open store profile */}
+                <div className="shrink-0 pl-1">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-50 group-hover:bg-sky-50 text-slate-400 group-hover:text-sky-600 transition-all shadow-2xs">
+                    <ChevronLeft className="h-5 w-5" />
+                  </div>
                 </div>
               </div>
+
+              {/* Manager Superadmin Actions on the card directly */}
+              {isManagerUnlocked && (
+                <div
+                  className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {onEditStore && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditStore(store);
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <Edit3 className="h-3 w-3 text-sky-600" />
+                        <span>تعديل</span>
+                      </button>
+                    )}
+
+                    {store.isClaimed || store.claimStatus === 'verified' ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          unclaimStore(store.id);
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <span>إلغاء التوثيق</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateStore(store.id, { isClaimed: true, claimStatus: 'verified', claimedAt: new Date().toISOString() });
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                        <span>توثيق فوري</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div>
+                    {deletingStoreId === store.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteStore(store.id);
+                            setDeletingStoreId(null);
+                          }}
+                          className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 text-[11px] font-bold cursor-pointer"
+                        >
+                          تأكيد الحذف
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingStoreId(null);
+                          }}
+                          className="rounded-lg bg-slate-200 text-slate-800 px-1.5 py-1 text-[11px] font-bold cursor-pointer"
+                        >
+                          إلغاء
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingStoreId(store.id);
+                        }}
+                        className="flex items-center gap-1 rounded-lg bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 px-2 py-1 text-[11px] font-bold cursor-pointer transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3 text-rose-600" />
+                        <span>حذف كمدير</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

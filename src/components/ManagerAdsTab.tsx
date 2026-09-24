@@ -182,11 +182,9 @@ export const ManagerAdsTab: React.FC = () => {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (window.confirm(`هل أنت متأكد من رغبتك بحذف إعلان "${name}" نهائياً من النظام؟`)) {
-      deleteCategoryAd(id);
-      setActionSuccessMsg(`تم حذف إعلان "${name}" بنجاح.`);
-      setTimeout(() => setActionSuccessMsg(''), 3000);
-    }
+    deleteCategoryAd(id);
+    setActionSuccessMsg(`تم حذف إعلان "${name}" بنجاح.`);
+    setTimeout(() => setActionSuccessMsg(''), 3000);
   };
 
   const handleRenew = (id: string, name: string, days: number) => {

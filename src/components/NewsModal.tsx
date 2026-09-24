@@ -145,10 +145,10 @@ export const NewsModal: React.FC<NewsModalProps> = ({
     // 2. Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const matchTitle = news.title.toLowerCase().includes(q);
-      const matchSummary = news.summary.toLowerCase().includes(q);
-      const matchSource = news.source?.toLowerCase().includes(q) || false;
-      const matchCategory = news.category.toLowerCase().includes(q);
+      const matchTitle = (news.title?.toLowerCase().includes(q)) ?? false;
+      const matchSummary = (news.summary?.toLowerCase().includes(q)) ?? false;
+      const matchSource = (news.source?.toLowerCase().includes(q)) ?? false;
+      const matchCategory = (news.category?.toLowerCase().includes(q)) ?? false;
       if (!matchTitle && !matchSummary && !matchSource && !matchCategory) {
         return false;
       }

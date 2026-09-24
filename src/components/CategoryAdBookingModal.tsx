@@ -102,6 +102,7 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
   const [phone, setPhone] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
   const [copiedZainNumber, setCopiedZainNumber] = useState<boolean>(false);
+  const [formError, setFormError] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [createdRefCode, setCreatedRefCode] = useState('');
 
@@ -118,8 +119,9 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
 
   const handleProceedToPayment = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
     if (!storeName.trim() || !adText.trim() || !phone.trim()) {
-      alert('يرجى كتابة اسم المتجر، نص الإعلان، ورقم الهاتف!');
+      setFormError('يرجى كتابة اسم المتجر، نص الإعلان، ورقم الهاتف أولاً للمتابعة!');
       return;
     }
     setPaymentError('');
@@ -367,6 +369,14 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
                   ))}
                 </div>
               </div>
+
+              {/* Form Error Banner */}
+              {formError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-right text-xs font-bold text-rose-700 animate-in fade-in flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                  <span>{formError}</span>
+                </div>
+              )}
 
               {/* Submit to Payment */}
               <button

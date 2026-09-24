@@ -63,7 +63,7 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
 
 🏪 *اسم المتجر:* ${item.name}
 📞 *رقم المتجر:* ${item.phone}
-📍 *العنوان:* ${item.address}
+📍 *العنوان:* ${item.address || `${item.districtName || ''} - ${item.governorateName || ''}` || 'غير محدد بعد'}
 🔖 *نوع البلاغ:* ${selectedReason}
 📝 *تفاصيل المشكلة:* ${details.trim() || 'لا توجد تفاصيل إضافية'}
 
@@ -229,7 +229,7 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
                     <span>•</span>
                     <span className="truncate flex items-center gap-1">
                       <MapPin className="h-3 w-3 text-slate-400" />
-                      {item.address}
+                      {item.address || `${item.districtName ? `${item.governorateName ? `${item.governorateName} - ` : ''}${item.districtName}` : (item.governorateName || 'العراق')}`}
                     </span>
                   </div>
                 </div>

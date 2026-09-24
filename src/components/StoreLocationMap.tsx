@@ -13,7 +13,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { DirectoryItem } from '../types/shatrah';
-import { DISTRICT_COORDINATES } from '../data/iraqLocations';
+import { DISTRICT_COORDINATES, IRAQ_GOVERNORATES } from '../data/iraqLocations';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 
@@ -21,12 +21,14 @@ interface StoreLocationMapProps {
   item: DirectoryItem;
   isOwner?: boolean;
   onOpenEditLocation?: () => void;
+  onClaimStore?: (item: DirectoryItem) => void;
 }
 
 export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
   item,
   isOwner = false,
   onOpenEditLocation,
+  onClaimStore,
 }) => {
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -40,9 +42,11 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
     item.lat !== 0 &&
     item.lng !== 0;
 
-  // Resolve coordinates: either exact GPS or district/governorate center for broad area preview
+  // Resolve coordinates: either exact GPS, or district center, or governorate center
   let mapLat: number;
   let mapLng: number;
+
+  const normalizedDistrictId = (item.districtId || '').toLowerCase().trim();
 
   if (hasExactGps) {
     mapLat = item.lat!;
@@ -51,10 +55,23 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
     const districtCoord = DISTRICT_COORDINATES[item.districtId];
     mapLat = districtCoord.lat;
     mapLng = districtCoord.lng;
+  } else if (normalizedDistrictId && DISTRICT_COORDINATES[normalizedDistrictId]) {
+    const districtCoord = DISTRICT_COORDINATES[normalizedDistrictId];
+    mapLat = districtCoord.lat;
+    mapLng = districtCoord.lng;
   } else {
-    // Default regional center for Shatrah / Dhi Qar
-    mapLat = 31.4087;
-    mapLng = 46.1738;
+    // Fallback to governorate center
+    const govObj = IRAQ_GOVERNORATES.find(
+      (g) => g.id === item.governorateId || g.name === item.governorateName
+    );
+    if (govObj?.center) {
+      mapLat = govObj.center.lat;
+      mapLng = govObj.center.lng;
+    } else {
+      // Default: Baghdad (National Capital Center)
+      mapLat = 33.3152;
+      mapLng = 44.3661;
+    }
   }
 
   // Location display naming
@@ -62,37 +79,29 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
     ? `${item.governorateName}${item.districtName ? ` - ${item.districtName}` : ''}`
     : item.districtName || 'العراق';
 
-  const addressText = item.address || 'العنوان غير محدد بدقة بعد';
+  const hasAddress = Boolean(item.address && item.address.trim().length > 0);
+  const addressText = hasAddress
+    ? item.address!.trim()
+    : 'لم يتم تحديد العنوان التفصيلي بعد (يُترك للمالك الموثق لإضافة العنوان الصحيح)';
 
   // Build accurate Google Maps URLs
   // 1. If store has a custom Google Maps URL provided by owner, prioritize it
-  // 2. If exact GPS exists, navigate to exact lat,lng
-  // 3. Otherwise, search Google Maps using store name + address + city for genuine place matching
+  // 2. Search Google Maps using store name + address + city for genuine place matching
   const googleMapsSearchUrl = item.googleMapsUrl?.trim()
     ? item.googleMapsUrl.trim()
-    : hasExactGps
-    ? `https://www.google.com/maps/search/?api=1&query=${mapLat},${mapLng}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        [item.name, item.address, item.districtName, item.governorateName, 'العراق']
+        [item.name, hasAddress ? item.address : null, item.districtName, item.governorateName, 'العراق']
           .filter(Boolean)
           .join(' ')
       )}`;
 
-  const googleMapsDirectionsUrl = hasExactGps
-    ? `https://www.google.com/maps/dir/?api=1&destination=${mapLat},${mapLng}`
-    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-        [item.name, item.address, item.districtName, item.governorateName, 'العراق']
-          .filter(Boolean)
-          .join(' ')
-      )}`;
+  // Navigation directions directly to resolved coordinates
+  const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapLat},${mapLng}`;
 
-  // OpenStreetMap embed iframe URL
+  // OpenStreetMap embed iframe URL with pin marker
   const delta = isExpanded ? 0.009 : 0.005;
   const bbox = `${mapLng - delta}%2C${mapLat - delta * 0.8}%2C${mapLng + delta}%2C${mapLat + delta * 0.8}`;
-  // Only show the specific pin marker on map if exact GPS is confirmed
-  const embedMapUrl = hasExactGps
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${mapLat}%2C${mapLng}`
-    : `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik`;
+  const embedMapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${mapLat}%2C${mapLng}`;
 
   const handleOpenGoogleMaps = (url: string) => {
     if (Capacitor.isNativePlatform()) {
@@ -220,7 +229,9 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
           <Compass className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
           <div>
             <span className="font-bold text-slate-900 block text-[11px]">العنوان الدقيق:</span>
-            <span className="text-slate-700 text-xs font-medium">{addressText}</span>
+            <span className={`text-xs ${hasAddress ? 'text-slate-800 font-semibold' : 'text-amber-800 font-medium'}`}>
+              {addressText}
+            </span>
           </div>
         </div>
 
@@ -237,24 +248,37 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
         )}
       </div>
 
-      {/* Notice if exact GPS is not yet saved */}
-      {!hasExactGps && (
+      {/* Notice if exact address or GPS is not yet saved */}
+      {(!hasExactGps || !hasAddress) && (
         <div className="rounded-xl bg-sky-50/70 border border-sky-200/70 p-2.5 flex items-start gap-2 text-[11px] text-sky-900">
           <AlertCircle className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             <span className="font-bold block">موقع الخريطة أدناه هو مركز منطقة ({item.districtName || item.governorateName})</span>
             <span className="text-sky-800 block text-[10px] leading-relaxed">
-              حرصاً على دقة البيانات، لم يتم تخمين أي نقطة عشوائية. يمكنك الانتقال إلى تطبيق خرائط جوجل للبحث عن العنوان المسجل بدقة عبر الأزرار أدناه.
+              حرصاً على المصداقية وعدم عرض أي عناوين غير دقيقة، يُترك لصاحب المتجر المعتمد كتابة الشارع والحي والنقطة الدالة وتثبيت الموقع الجغرافي.
             </span>
-            {isOwner && onOpenEditLocation && (
-              <button
-                type="button"
-                onClick={onOpenEditLocation}
-                className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
-              >
-                <span>📍 هل أنت المالك؟ اضغط هنا لتثبيت إحداثيات GPS أو رابط خرائط Google لمتجرك</span>
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              {isOwner && onOpenEditLocation && (
+                <button
+                  type="button"
+                  onClick={onOpenEditLocation}
+                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 text-[10px] font-bold shadow-2xs transition cursor-pointer"
+                >
+                  <Edit3 className="h-3 w-3" />
+                  <span>أنت المالك: اضغط هنا لكتابة العنوان الصحيح وتثبيت موقع متجرك ✏️</span>
+                </button>
+              )}
+              {!item.isClaimed && onClaimStore && (
+                <button
+                  type="button"
+                  onClick={() => onClaimStore(item)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-2.5 py-1 text-[10px] font-bold shadow-2xs transition cursor-pointer"
+                >
+                  <ShieldCheck className="h-3 w-3" />
+                  <span>وثّق متجرك لإضافة العنوان الصحيح وموقع الخريطة 👑</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

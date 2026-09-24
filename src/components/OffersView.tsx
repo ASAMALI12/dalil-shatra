@@ -60,17 +60,31 @@ export const OffersView: React.FC<OffersViewProps> = ({ onSelectOffer }) => {
       }
     }
     const matchCat = selectedCategory === 'all' || offer.category === selectedCategory;
-    const matchSearch = !search.trim() || 
-      offer.businessName.toLowerCase().includes(search.toLowerCase()) ||
-      offer.title.toLowerCase().includes(search.toLowerCase()) ||
-      offer.description.toLowerCase().includes(search.toLowerCase());
+    const q = search.trim().toLowerCase();
+    const matchSearch = !q || 
+      (offer.businessName?.toLowerCase().includes(q) ?? false) ||
+      (offer.title?.toLowerCase().includes(q) ?? false) ||
+      (offer.description?.toLowerCase().includes(q) ?? false);
     return matchCat && matchSearch;
   });
 
   const displayOffers = filteredOffers;
 
-  const handleCopyCode = (code: string) => {
-    navigator.clipboard?.writeText?.(code);
+  const handleCopyCode = async (code: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = code;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+    } catch {
+      // clipboard write failed silently
+    }
     setClaimedCode(code);
     setTimeout(() => setClaimedCode(null), 3000);
   };

@@ -5,7 +5,7 @@ export interface DirectoryItem {
   subCategory?: string;
   phone: string;
   whatsapp?: string;
-  address: string;
+  address?: string;
   governorateId?: string;
   districtId?: string;
   governorateName?: string;
@@ -16,7 +16,7 @@ export interface DirectoryItem {
   workingHours: string;
   imageUrl: string;
   images?: string[];
-  description: string;
+  description?: string;
   featured?: boolean;
   tags: string[];
   isClaimed?: boolean;

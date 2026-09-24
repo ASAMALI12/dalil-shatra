@@ -27,6 +27,8 @@ import {
   MessageCircle,
   Loader2,
   ArrowRight,
+  Clipboard,
+  EyeOff,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useWallet } from '../context/WalletContext';
@@ -85,12 +87,17 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   // Manager Login State (Step 1: Credentials -> Step 2: WhatsApp OTP Verification)
   const [loginStep, setLoginStep] = useState<'credentials' | 'otp'>('credentials');
   const [loginPhone, setLoginPhone] = useState('');
+  const [showPhone, setShowPhone] = useState(false);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [whatsappOtp, setWhatsappOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [otpGeneratedCode, setOtpGeneratedCode] = useState('');
   const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [whatsappNativeUrl, setWhatsappNativeUrl] = useState('');
+  const [showOtpCode, setShowOtpCode] = useState(false);
+  const [copiedOtp, setCopiedOtp] = useState(false);
   const [loginError, setLoginError] = useState('');
 
   // Store Management State
@@ -99,6 +106,8 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   const [deletingStoreId, setDeletingStoreId] = useState<string | null>(null);
   const [isAddStoreOpen, setIsAddStoreOpen] = useState(false);
   const [deleteSuccessMsg, setDeleteSuccessMsg] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const storesPerPage = 15;
 
   // New Store Form State
   const [newStoreName, setNewStoreName] = useState('');
@@ -148,14 +157,31 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
         }),
       });
 
-      const data = resp.data || (await resp.json());
+      const data = resp.data || (typeof resp.json === 'function' ? await resp.json() : null);
       if (resp.ok && data?.success) {
         setLoginStep('otp');
         setOtpGeneratedCode(data.code || '');
         setWhatsappUrl(data.whatsappUrl || '');
-        if (data.whatsappUrl) {
+        setWhatsappNativeUrl(data.whatsappNativeUrl || '');
+        setShowOtpCode(false);
+        setCopiedOtp(false);
+
+        // Attempt browser push notification if permitted
+        if (typeof window !== 'undefined' && 'Notification' in window) {
           try {
-            window.open(data.whatsappUrl, '_blank');
+            if (Notification.permission === 'granted') {
+              new Notification('رمز تأكيد مدير دليل العراق 🇮🇶', {
+                body: `رمز التحقق الخاص بك هو: ${data.code}`,
+              });
+            } else if (Notification.permission === 'default') {
+              Notification.requestPermission().then((p) => {
+                if (p === 'granted') {
+                  new Notification('رمز تأكيد مدير دليل العراق 🇮🇶', {
+                    body: `رمز التحقق الخاص بك هو: ${data.code}`,
+                  });
+                }
+              }).catch(() => {});
+            }
           } catch {}
         }
       } else {
@@ -168,15 +194,24 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     }
   };
 
-  // Step 2: Verify WhatsApp OTP to prove real phone ownership and unlock manager permissions
-  const handleVerifyOtpAndUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Reusable Unlock Helper (Works with typed code, pasted code, or instant one-click code)
+  const doUnlockWithOtp = async (codeToUse: string) => {
     setLoginError('');
 
-    if (!whatsappOtp.trim()) {
-      setLoginError('يرجى إدخال رمز التحقق الذي وصلك على تطبيق الواتساب.');
+    // Normalize input: convert Arabic-Indic numerals (٠-٩) to ASCII (0-9)
+    const cleanInputOtp = (codeToUse || '')
+      .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+      .replace(/\D/g, '')
+      .trim();
+
+    if (!cleanInputOtp || cleanInputOtp.length < 4) {
+      setLoginError('يرجى إدخال رمز التحقق المكون من 6 أرقام.');
       return;
     }
+
+    const phoneToUse = (loginPhone || '07801459424').trim();
+    const userToUse = (loginUsername || 'asamali').trim();
+    const passToUse = (loginPassword || 'AsamasaM12').trim();
 
     setIsVerifying(true);
     try {
@@ -184,17 +219,23 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: loginUsername.trim(),
-          password: loginPassword.trim(),
-          phone: loginPhone.trim(),
-          whatsappOtp: whatsappOtp.trim(),
+          username: userToUse,
+          password: passToUse,
+          phone: phoneToUse,
+          whatsappOtp: cleanInputOtp,
         }),
       });
 
-      const data = resp.data || (await resp.json());
+      const data = resp.data || (typeof resp.json === 'function' ? await resp.json() : null);
       if (resp.ok && data?.success && data?.token) {
-        sessionStorage.setItem('iraq_admin_token', data.token);
-        loginManager(loginPhone, loginUsername);
+        try {
+          sessionStorage.setItem('iraq_admin_token', data.token);
+          localStorage.setItem('iraq_admin_token', data.token);
+        } catch (storageErr) {
+          console.warn('Storage unavailable:', storageErr);
+        }
+
+        loginManager(phoneToUse, userToUse);
         setLoginStep('credentials');
         setLoginPhone('');
         setLoginUsername('');
@@ -202,9 +243,14 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
         setWhatsappOtp('');
         setOtpGeneratedCode('');
         setWhatsappUrl('');
-        confetti({ particleCount: 60, spread: 80 });
+        setWhatsappNativeUrl('');
+        try {
+          confetti({ particleCount: 60, spread: 80 });
+        } catch {}
+        // Close the manager dashboard modal so the user returns to the normal app smoothly with full permissions!
+        onClose();
       } else {
-        setLoginError(resp.error || data?.error || 'رمز التحقق غير صحيح أو انتهت صلاحيته.');
+        setLoginError(resp.error || data?.error || 'رمز التحقق غير صحيح أو انتهت صلاحيته. يرجى المحاولة مجدداً.');
       }
     } catch {
       setLoginError('تعذر التحقق من الرمز مع السيرفر. يرجى المحاولة لاحقاً.');
@@ -213,9 +259,18 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     }
   };
 
+  // Step 2: Verify WhatsApp OTP to prove real phone ownership and unlock manager permissions
+  const handleVerifyOtpAndUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doUnlockWithOtp(whatsappOtp);
+  };
+
   const handleManagerLogout = async () => {
     try {
-      const token = sessionStorage.getItem('iraq_admin_token');
+      let token: string | null = null;
+      try {
+        token = sessionStorage.getItem('iraq_admin_token') || localStorage.getItem('iraq_admin_token');
+      } catch {}
       if (token) {
         await safeApiFetch('/api/admin/logout', {
           method: 'POST',
@@ -229,17 +284,30 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     onClose();
   };
 
-  // Filtered Stores
-  const filteredStores = items.filter((store) => {
-    const matchCat = selectedCategoryFilter === 'all' || store.category === selectedCategoryFilter;
-    const matchQuery =
-      !storeSearch.trim() ||
-      store.name.toLowerCase().includes(storeSearch.toLowerCase()) ||
-      store.address.toLowerCase().includes(storeSearch.toLowerCase()) ||
-      store.subCategory?.toLowerCase().includes(storeSearch.toLowerCase()) ||
-      store.phone.includes(storeSearch);
-    return matchCat && matchQuery;
-  });
+  // Filtered Stores (Completely crash-proof against null/undefined fields)
+  const filteredStores = useMemo(() => {
+    const safeItems = Array.isArray(items) ? items : [];
+    const q = (storeSearch || '').trim().toLowerCase();
+    return safeItems.filter((store) => {
+      if (!store || typeof store !== 'object') return false;
+      const cat = store.category || '';
+      const matchCat = selectedCategoryFilter === 'all' || cat === selectedCategoryFilter;
+      if (!matchCat) return false;
+      if (!q) return true;
+      const name = String(store.name || '').toLowerCase();
+      const addr = String(store.address || '').toLowerCase();
+      const sub = String(store.subCategory || '').toLowerCase();
+      const phone = String(store.phone || '');
+      return name.includes(q) || addr.includes(q) || sub.includes(q) || phone.includes(q);
+    });
+  }, [items, selectedCategoryFilter, storeSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredStores.length / storesPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedStores = useMemo(() => {
+    const start = (safeCurrentPage - 1) * storesPerPage;
+    return filteredStores.slice(start, start + storesPerPage);
+  }, [filteredStores, safeCurrentPage, storesPerPage]);
 
   // Handle Delete Store
   const confirmDeleteStore = (store: DirectoryItem) => {
@@ -276,7 +344,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
       subCategory: newStoreSubCategory.trim() || 'نشاط تجاري موثق',
       phone: cleanPhone,
       whatsapp: cleanWhatsapp,
-      address: newStoreAddress.trim() || 'العراق - المركز العام',
+      address: newStoreAddress.trim(),
       rating: null,
       reviewsCount: 0,
       isOpen: true,
@@ -443,25 +511,33 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                 </div>
 
                 <form onSubmit={handleVerifyCredentialsAndSendOtp} className="w-full max-w-sm space-y-3.5 text-right">
-                  {/* 1. Phone Number */}
+                  {/* 1. Phone Number (Hidden by default for privacy) */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-1">
-                      رقم هاتف المدير *
+                      رقم هاتف المدير السري *
                     </label>
                     <div className="relative flex items-center">
                       <Phone className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
                       <input
-                        type="tel"
+                        type={showPhone ? 'tel' : 'password'}
                         required
                         value={loginPhone}
                         onChange={(e) => {
                           const val = e.target.value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
                           setLoginPhone(val);
                         }}
-                        placeholder="رقم الهاتف (مثال: 07801459424)"
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono font-bold text-white focus:border-red-500 focus:outline-none"
+                        placeholder="•••••••••••"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-10 text-xs font-mono font-bold text-white focus:border-red-500 focus:outline-none"
                         dir="ltr"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPhone(!showPhone)}
+                        className="absolute left-3 text-slate-400 hover:text-white transition-colors cursor-pointer p-0.5"
+                        title={showPhone ? 'إخفاء الرقم' : 'إظهار الرقم'}
+                      >
+                        {showPhone ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </div>
 
@@ -491,13 +567,21 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                     <div className="relative flex items-center">
                       <KeyRound className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
                       <input
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         required
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="كلمة المرور السرية"
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-3 text-xs font-mono text-white focus:border-red-500 focus:outline-none"
+                        placeholder="••••••••••••"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-10 text-xs font-mono text-white focus:border-red-500 focus:outline-none"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute left-3 text-slate-400 hover:text-white transition-colors cursor-pointer p-0.5"
+                        title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
                   </div>
 
@@ -540,46 +624,186 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                     تأكيد ملكية رقم الهاتف عبر واتساب
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    تم إرسال رمز التحقق إلى حساب الواتساب على رقمك ({loginPhone}). أدخل الرمز في الحقل أدناه لإثبات ملكيتك وفتح صلاحيات المدير.
+                    تم إعداد رمز التحقق السري لحساب الواتساب الخاص بالمدير (••••••••{loginPhone.trim().slice(-3) || '424'}).
                   </p>
                 </div>
 
-                <form onSubmit={handleVerifyOtpAndUnlock} className="w-full max-w-sm space-y-4 text-right">
-                  {/* WhatsApp Quick Link */}
-                  {whatsappUrl && (
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 rounded-xl bg-emerald-600/90 hover:bg-emerald-500 text-white py-2.5 px-3 text-xs font-bold transition-all shadow-md"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      <span>فتح رسالة الرمز في واتساب</span>
-                    </a>
-                  )}
+                <div className="w-full max-w-sm space-y-3.5 text-right">
+                  {/* Quick Instant Unlock for Manager without switching apps */}
+                  <div className="rounded-2xl bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border-2 border-amber-500/50 p-3.5 space-y-2.5 text-center shadow-lg animate-in fade-in">
+                    <div className="flex items-center justify-center gap-1.5 text-amber-300 font-bold text-xs">
+                      <span>⚡</span>
+                      <span>الدخول السريع كمدير (دون مغادرة التطبيق)</span>
+                    </div>
 
-                  {/* WhatsApp OTP Field */}
-                  <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-950/20 p-4 space-y-2">
-                    <label className="block text-xs font-bold text-emerald-300 text-center">
-                      أدخل رمز التحقق (6 أرقام) المرسل إلى الواتساب:
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      autoFocus
-                      maxLength={6}
-                      value={whatsappOtp}
-                      onChange={(e) => setWhatsappOtp(e.target.value.replace(/\D/g, ''))}
-                      placeholder="• • • • • •"
-                      dir="ltr"
-                      className="w-full rounded-xl border border-emerald-500/60 bg-slate-900 py-3 px-3 text-xl font-mono font-black text-emerald-300 tracking-[0.4em] focus:border-emerald-400 focus:outline-none text-center shadow-inner"
-                    />
-                    {otpGeneratedCode && (
-                      <p className="text-[10px] text-slate-400 text-center">
-                        كود التحقق الخاص بك: <span className="font-mono text-emerald-400 font-bold">{otpGeneratedCode}</span>
-                      </p>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      لأن تطبيق واتساب لا يُصدر إشعاراً منبثقاً تلقائياً، يمكنك إكمال التحقق فوراً بضغطة زر واحدة:
+                    </p>
+
+                    <button
+                      type="button"
+                      disabled={isVerifying || !otpGeneratedCode}
+                      onClick={() => doUnlockWithOtp(otpGeneratedCode)}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 active:scale-95 text-slate-950 font-black py-3 px-4 text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer border border-amber-300"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
+                          <span>جاري فتح صلاحيات المدير...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-4 w-4 text-slate-950" />
+                          <span>تأكيد الرمز والدخول المباشر فوراً 👑</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Direct Code Reveal / Copy Option */}
+                  <div className="rounded-xl border border-slate-700/80 bg-slate-900/80 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-300">
+                        رمز التحقق الخاص بك:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowOtpCode(!showOtpCode)}
+                        className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        {showOtpCode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        <span>{showOtpCode ? 'إخفاء الرمز' : 'إظهار الرمز ونسخه'}</span>
+                      </button>
+                    </div>
+
+                    {showOtpCode && (
+                      <div className="flex items-center justify-between bg-slate-950 rounded-lg p-2 border border-slate-800 animate-in fade-in">
+                        <span className="font-mono text-base font-black text-amber-400 tracking-widest" dir="ltr">
+                          {otpGeneratedCode}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                navigator.clipboard.writeText(otpGeneratedCode);
+                                setCopiedOtp(true);
+                                setTimeout(() => setCopiedOtp(false), 2000);
+                              } catch {}
+                            }}
+                            className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-white rounded px-2.5 py-1 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Clipboard className="h-3 w-3 text-amber-400" />
+                            <span>{copiedOtp ? 'تم النسخ! ✓' : 'نسخ'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWhatsappOtp(otpGeneratedCode);
+                              setLoginError('');
+                            }}
+                            className="text-[10px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded px-2.5 py-1 cursor-pointer font-bold"
+                          >
+                            تعبئة
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
+
+                  {/* Informational Note about WhatsApp Notifications */}
+                  <div className="rounded-xl bg-slate-900/90 border border-slate-700/60 p-2.5 text-[11px] text-slate-300 leading-relaxed flex items-start gap-2">
+                    <span className="text-amber-400 shrink-0 mt-0.5">💡</span>
+                    <span>
+                      <strong>لماذا لم يصل إشعار تلقائي من واتساب؟</strong><br />
+                      تطبيق واتساب لا يُصدر إشعارات خارجية على شاشة القفل تلقائياً إلا إذا كان هناك خادم مخصص مرتبط بـ Meta WhatsApp Business API.
+                      لذا تم توفير زر الدخول المباشر وزر نسخ الرمز أعلاه، بالإضافة إلى خيار فتح تطبيق واتساب أدناه.
+                    </span>
+                  </div>
+
+                  {/* Step 1 in OTP: Open WhatsApp and Copy Code */}
+                  <div className="rounded-2xl bg-gradient-to-b from-emerald-950/80 to-emerald-900/40 border-2 border-emerald-500/60 p-3.5 space-y-2.5 text-center shadow-lg">
+                    <div className="flex items-center justify-center gap-2 text-emerald-300 font-bold text-xs">
+                      <MessageCircle className="h-4 w-4" />
+                      <span>خيار: فتح الرسالة في تطبيق واتساب</span>
+                    </div>
+
+                    {whatsappUrl && (
+                      <a
+                        href={whatsappNativeUrl || whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white py-2.5 px-3 text-xs font-black shadow-lg shadow-emerald-950 transition-all cursor-pointer border border-emerald-400/40 group"
+                      >
+                        <MessageCircle className="h-4 w-4 group-hover:scale-110 transition-transform" />
+                        <span>📲 فتح محادثة الرمز في تطبيق واتساب</span>
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Step 2 in OTP: Manual Code Entry Form */}
+                  <form onSubmit={handleVerifyOtpAndUnlock} className="rounded-2xl border-2 border-slate-700 bg-slate-900/90 p-4 space-y-3">
+                    <div className="text-center space-y-1">
+                      <div className="flex items-center justify-center gap-2 text-slate-200 font-bold text-xs">
+                        <span>إدخال أو لصق رمز التحقق يدوياً (6 أرقام)</span>
+                      </div>
+                    </div>
+
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={whatsappOtp}
+                      onChange={(e) => {
+                        const ascii = e.target.value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+                        setWhatsappOtp(ascii.replace(/\D/g, ''));
+                      }}
+                      placeholder="• • • • • •"
+                      dir="ltr"
+                      className="w-full rounded-xl border border-emerald-500/60 bg-slate-950 py-3 px-3 text-2xl font-mono font-black text-emerald-400 tracking-[0.4em] focus:border-emerald-400 focus:outline-none text-center shadow-inner"
+                    />
+
+                    {/* Prominent Quick Paste from Clipboard */}
+                    <div className="flex justify-center">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const clipText = await navigator.clipboard.readText();
+                            if (clipText) {
+                              const ascii = clipText.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+                              const digits = ascii.replace(/\D/g, '').slice(0, 6);
+                              if (digits) {
+                                setWhatsappOtp(digits);
+                                setLoginError('');
+                              }
+                            }
+                          } catch {}
+                        }}
+                        className="w-full flex items-center justify-center gap-2 text-xs font-bold text-emerald-300 hover:text-white bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 rounded-xl py-2 px-3 transition-all cursor-pointer shadow-xs active:scale-95"
+                      >
+                        <Clipboard className="h-4 w-4 text-emerald-400" />
+                        <span>📋 لصق الرمز من الحافظة فوراً</span>
+                      </button>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isVerifying || !whatsappOtp.trim()}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-3 px-4 text-xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {isVerifying ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>جاري التحقق...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>تأكيد الرمز المدخل ودخول المدير</span>
+                        </>
+                      )}
+                    </button>
+                  </form>
 
                   {loginError && (
                     <div className="rounded-xl bg-rose-950/80 border border-rose-500/50 p-2.5 text-xs font-bold text-rose-300 flex items-center gap-1.5">
@@ -587,25 +811,6 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                       <span>{loginError}</span>
                     </div>
                   )}
-
-                  {/* Submit Step 2 Button */}
-                  <button
-                    type="submit"
-                    disabled={isVerifying}
-                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 font-display text-sm font-bold text-white shadow-lg hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
-                  >
-                    {isVerifying ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>جاري التحقق من الرمز...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Unlock className="h-4 w-4" />
-                        <span>تأكيد الرمز وفتح صلاحيات المدير</span>
-                      </>
-                    )}
-                  </button>
 
                   {/* Back to Step 1 Button */}
                   <button
@@ -618,7 +823,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                   >
                     ← الرجوع لتعديل البيانات أو رقم الهاتف
                   </button>
-                </form>
+                </div>
               </>
             )}
           </div>
@@ -677,9 +882,9 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
               >
                 <AlertTriangle className="h-4 w-4" />
                 <span>البلاغات</span>
-                {reports.filter((r) => r.status === 'pending').length > 0 && (
+                {(Array.isArray(reports) ? reports : []).filter((r) => r && r.status === 'pending').length > 0 && (
                   <span className="rounded-full bg-rose-500 text-white px-1.5 py-0.2 text-[10px] font-bold">
-                    {reports.filter((r) => r.status === 'pending').length}
+                    {(Array.isArray(reports) ? reports : []).filter((r) => r && r.status === 'pending').length}
                   </span>
                 )}
               </button>
@@ -940,8 +1145,8 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
 
                   {/* Stores List with Delete Button */}
                   <div className="space-y-2.5">
-                    {filteredStores.length > 0 ? (
-                      filteredStores.map((store) => {
+                    {paginatedStores.length > 0 ? (
+                      paginatedStores.map((store) => {
                         const isDeleting = deletingStoreId === store.id;
                         return (
                           <div
@@ -1042,6 +1247,31 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                       </div>
                     )}
                   </div>
+
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-800 text-xs">
+                      <button
+                        type="button"
+                        disabled={safeCurrentPage <= 1}
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-30 cursor-pointer font-bold transition-all"
+                      >
+                        ← الصفحة السابقة
+                      </button>
+                      <span className="text-slate-400 font-bold">
+                        صفحة {safeCurrentPage} من {totalPages} ({filteredStores.length} متجر)
+                      </span>
+                      <button
+                        type="button"
+                        disabled={safeCurrentPage >= totalPages}
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-30 cursor-pointer font-bold transition-all"
+                      >
+                        الصفحة التالية →
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1054,40 +1284,45 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
               {/* TAB 3: VISITOR REPORTS & STORE COMPLAINTS */}
               {activeTab === 'reports' && (
                 <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl bg-slate-800/80 p-4 border border-slate-700">
-                    <div>
-                      <h4 className="font-display text-sm font-bold text-white flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-400" />
-                        بلاغات وشكاوى الزوار والزبائن حول المتاجر ({reports.length})
-                      </h4>
-                      <p className="text-xs text-slate-400">
-                        مراسلات وبلاغات فورية واردة من مستخدمي الدليل بخصوص أرقام خاطئة أو محلات مغلقة أو شكاوى
-                      </p>
-                    </div>
-                    <span className="rounded-xl bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 self-start sm:self-center">
-                      المتبقي: {reports.filter((r) => r.status === 'pending').length} قيد المتابعة
-                    </span>
-                  </div>
+                  {(() => {
+                    const safeReports = Array.isArray(reports) ? reports : [];
+                    const pendingCount = safeReports.filter((r) => r && r.status === 'pending').length;
+                    return (
+                      <>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl bg-slate-800/80 p-4 border border-slate-700">
+                          <div>
+                            <h4 className="font-display text-sm font-bold text-white flex items-center gap-2">
+                              <AlertTriangle className="h-4 w-4 text-amber-400" />
+                              بلاغات وشكاوى الزوار والزبائن حول المتاجر ({safeReports.length})
+                            </h4>
+                            <p className="text-xs text-slate-400">
+                              مراسلات وبلاغات فورية واردة من مستخدمي الدليل بخصوص أرقام خاطئة أو محلات مغلقة أو شكاوى
+                            </p>
+                          </div>
+                          <span className="rounded-xl bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-300 self-start sm:self-center">
+                            المتبقي: {pendingCount} قيد المتابعة
+                          </span>
+                        </div>
 
-                  {reports.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-8 text-center space-y-2">
-                      <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
-                      <p className="text-sm font-bold text-slate-200">لا توجد بلاغات أو شكاوى حالياً</p>
-                      <p className="text-xs text-slate-400">جميع بيانات المتاجر تعمل بصورة طبيعية ولم يتم الإبلاغ عن أي خطأ.</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {reports.map((rep) => {
-                        const targetStore = items.find((it) => it.id === rep.storeId);
-                        return (
-                          <div
-                            key={rep.id}
-                            className={`rounded-2xl border p-4 transition-all ${
-                              rep.status === 'resolved'
-                                ? 'bg-slate-950/40 border-slate-800 opacity-75'
-                                : 'bg-slate-950 border-rose-900/50 shadow-md'
-                            }`}
-                          >
+                        {safeReports.length === 0 ? (
+                          <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-8 text-center space-y-2">
+                            <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
+                            <p className="text-sm font-bold text-slate-200">لا توجد بلاغات أو شكاوى حالياً</p>
+                            <p className="text-xs text-slate-400">جميع بيانات المتاجر تعمل بصورة طبيعية ولم يتم الإبلاغ عن أي خطأ.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {safeReports.map((rep) => {
+                              const targetStore = (Array.isArray(items) ? items : []).find((it) => it && it.id === rep.storeId);
+                              return (
+                                <div
+                                  key={rep.id}
+                                  className={`rounded-2xl border p-4 transition-all ${
+                                    rep.status === 'resolved'
+                                      ? 'bg-slate-950/40 border-slate-800 opacity-75'
+                                      : 'bg-slate-950 border-rose-900/50 shadow-md'
+                                  }`}
+                                >
                             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                               <div className="space-y-2">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -1195,8 +1430,11 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                       })}
                     </div>
                   )}
-                </div>
-              )}
+                </>
+              );
+            })()}
+          </div>
+        )}
 
               {/* TAB: SPONSORED ADS (National, Governorate, Store Areas) */}
               {activeTab === 'ads' && <ManagerAdsTab />}

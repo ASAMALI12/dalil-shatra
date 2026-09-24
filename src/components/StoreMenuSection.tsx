@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Crown,
 } from 'lucide-react';
 import { DirectoryItem, StoreMenuItem } from '../types/shatrah';
 import { getStoreMenu } from '../utils/storeMenuHelper';
@@ -22,6 +23,7 @@ interface StoreMenuSectionProps {
   isOwner: boolean;
   onOpenMenuEditor?: () => void;
   onOpenImageZoom?: (url: string) => void;
+  onClaimStore?: (store: DirectoryItem) => void;
 }
 
 export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
@@ -29,6 +31,7 @@ export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
   isOwner,
   onOpenMenuEditor,
   onOpenImageZoom,
+  onClaimStore,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -151,10 +154,10 @@ export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
 
               <div className="max-w-md mx-auto space-y-1">
                 <h4 className="font-display text-xs sm:text-sm font-bold text-slate-800">
-                  لم يقم المتجر برفع قائمة الأسعار أو المنيو بعد
+                  لم يتم إضافة قائمة الأصناف أو الأسعار بعد
                 </h4>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  حرصاً على دقة المعلومات وعدم عرض أي أسعار غير صحيحة، لم تُدرج أي أسعار تقديرية. يمكنك الاستفسار عن أحدث الأسعار والوجبات أو الخدمات مباشرة من إدارة المتجر.
+                  حرصاً على دقة المعلومات، لم تُدرج أي قوائم أو أكلات أو أسعار تقديرية. يُترك لصاحب المتجر عند توثيق متجره إضافة وتحديد نوع الأكلات والوجبات أو أنواع الألبسة أو الخدمات والعيادات وقائمة الأسعار الحقيقية بدقة.
                 </p>
               </div>
 
@@ -166,7 +169,7 @@ export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
                       👑 أنت المالك المعتمد لهذا المتجر
                     </span>
                     <span className="text-[11px] text-emerald-800">
-                      يمكنك الآن إضافة أصناف المنيو الحقيقية وقائمة الأسعار أو رفع صور المنيو الورقية من هاتفك.
+                      يمكنك الآن إضافة أصناف المنيو الحقيقية، تحديد نوع الأكلات أو السلع، وقائمة الأسعار أو رفع صور القائمة من هاتفك.
                     </span>
                   </div>
                   <button
@@ -179,8 +182,19 @@ export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
                   </button>
                 </div>
               ) : (
-                /* Customer Contact Actions */
+                /* Customer Contact Actions & Claim Button */
                 <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                  {!item.isClaimed && onClaimStore && (
+                    <button
+                      type="button"
+                      onClick={() => onClaimStore(item)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-3 py-1.5 text-xs font-bold shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <Crown className="h-3.5 w-3.5" />
+                      <span>وثّق متجرك لإضافة المنيو والأسعار 👑</span>
+                    </button>
+                  )}
+
                   {(item.whatsapp || item.phone) && (
                     <button
                       type="button"

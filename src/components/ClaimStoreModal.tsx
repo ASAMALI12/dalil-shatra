@@ -50,6 +50,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
 
   const [ownerName, setOwnerName] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
+  const [stepInfoError, setStepInfoError] = useState('');
 
   // WhatsApp OTP Verification state
   const [otpInput, setOtpInput] = useState<string>('');
@@ -64,6 +65,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
       setPhoneInput(store.phone || '');
       setOwnerName(store.claimedByName || '');
       setStep('info');
+      setStepInfoError('');
       setOtpInput('');
       setOtpError('');
     }
@@ -83,14 +85,15 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
   // Step 1 -> Step 2: Verify phone and send WhatsApp OTP
   const handleProceedToOtp = (e: React.FormEvent) => {
     e.preventDefault();
+    setStepInfoError('');
     setOtpError('');
 
     if (!ownerName.trim()) {
-      alert('يرجى إدخال اسمك الكريم (صاحب المتجر)');
+      setStepInfoError('يرجى إدخال اسمك الكريم (صاحب المتجر)');
       return;
     }
     if (!phoneInput.trim()) {
-      alert('يرجى إدخال رقم الهاتف المسجل للمتجر لتأكيد الملكية');
+      setStepInfoError('يرجى إدخال رقم الهاتف المسجل للمتجر لتأكيد الملكية');
       return;
     }
 
@@ -104,8 +107,8 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
       cleanStorePhone === cleanInputPhone;
 
     if (!isMatch) {
-      alert(
-        `رقم الهاتف الذي أدخلته (${phoneInput}) لا يطابق رقم الهاتف المسجل لهذا المتجر في الدليل (${store.phone})!\nيجب تأكيد نفس رقم هاتف المتجر للمطالبة بملكيته.`
+      setStepInfoError(
+        `رقم الهاتف الذي أدخلته (${phoneInput}) لا يطابق رقم الهاتف المسجل لهذا المتجر في الدليل (${store.phone})! يجب تأكيد نفس رقم هاتف المتجر للمطالبة بملكيته.`
       );
       return;
     }
@@ -127,18 +130,19 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
         const data = await res.json().catch(() => ({}));
         setIsSendingOtp(false);
         if (!res.ok || !data.success) {
-          alert(data.error || 'تعذر إرسال رمز التحقق عبر الواتساب. يرجى مراجعة إدارة الدليل.');
+          setStepInfoError(data.error || 'تعذر إرسال رمز التحقق عبر الواتساب. يرجى مراجعة إدارة الدليل.');
           return;
         }
 
         setOtpInput('');
         setOtpError('');
+        setStepInfoError('');
         setResendTimer(60);
         setStep('verify');
       })
       .catch(() => {
         setIsSendingOtp(false);
-        alert('فشل الاتصال بالخادم لإرسال رمز التحقق. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.');
+        setStepInfoError('فشل الاتصال بالخادم لإرسال رمز التحقق. يرجى التحقق من اتصال الإنترنت والمحاولة مجدداً.');
       });
   };
 
@@ -394,6 +398,14 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
                 </span>
               </div>
 
+              {/* Step 1 Error Banner */}
+              {stepInfoError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-right text-xs font-semibold text-rose-700 animate-in fade-in flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
+                  <p>{stepInfoError}</p>
+                </div>
+              )}
+
               {/* Submit CTA */}
               <button
                 type="submit"
@@ -517,9 +529,34 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
                 <h4 className="font-display text-lg sm:text-xl font-bold text-slate-900">
                   مبروك! أصبحت المالك المعتمد لمتجر "{claimedStoreResult.name}" 👑
                 </h4>
-                <p className="text-xs text-slate-600 max-w-xs mx-auto mt-1">
-                  تم توثيق وتأكيد رقم الهاتف بنجاح باسم <strong>({ownerName})</strong>. بصفتك المالك، يمكنك الآن إضافة وتحديث صور المتجر وتعيين الغلاف، أو تغيير كافة معلومات وبيانات المتجر.
+                <p className="text-xs text-slate-600 max-w-sm mx-auto mt-1">
+                  تم توثيق وتأكيد ملكية المتجر بنجاح باسم <strong>({ownerName})</strong>. يمكنك الآن إضافة العنوان الحقيقي الدقيق لمتجرك، كتابة النبذة التعريفية، تحديد نوع الأكلات أو الألبسة أو التخصص، وإضافة قائمة الأصناف والأسعار.
                 </p>
+              </div>
+
+              {/* What to do next instructions */}
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-right space-y-2">
+                <span className="font-display text-xs font-bold text-emerald-950 block">
+                  خطوات يُنصح بإكمالها الآن لمتجرك:
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-emerald-900">
+                  <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                    <span>📍</span>
+                    <span>إضافة العنوان الدقيق والشارع</span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                    <span>📝</span>
+                    <span>كتابة النبذة ووصف الخدمات</span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                    <span>🏷️</span>
+                    <span>تحديد نوع الأكلات أو السلع</span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 flex items-center gap-1.5">
+                    <span>📋</span>
+                    <span>إضافة قائمة الأصناف والأسعار</span>
+                  </div>
+                </div>
               </div>
 
               {/* Owner Badge Preview */}
@@ -554,7 +591,7 @@ export const ClaimStoreModal: React.FC<ClaimStoreModalProps> = ({
                     className="flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-600 py-3 font-display text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition-all cursor-pointer"
                   >
                     <Edit3 className="h-4 w-4" />
-                    <span>تعديل معلومات المتجر والغلاف ✏️</span>
+                    <span>كتابة النبذة وتعديل الأصناف ✏️</span>
                   </button>
                 )}
 

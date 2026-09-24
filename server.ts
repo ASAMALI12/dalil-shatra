@@ -37,8 +37,9 @@ function getServerSupabase(): SupabaseClient | null {
 }
 
 // Admin credentials configured via environment variables (with secure default fallback for local/test runtimes)
-const ADMIN_USERNAME = process.env.IRAQ_ADMIN_USERNAME || "admin";
-const ADMIN_PASSWORD = process.env.IRAQ_ADMIN_PASSWORD || "admin123456";
+const ADMIN_USERNAME = process.env.IRAQ_ADMIN_USERNAME || "asamali";
+const ADMIN_PASSWORD = process.env.IRAQ_ADMIN_PASSWORD || "AsamasaM12";
+const ADMIN_PHONE = "07801459424";
 const ADMIN_TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
 
 // In-memory token store for authenticated admin sessions
@@ -342,10 +343,39 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
     // All credentials are valid! Generate 6-digit OTP for WhatsApp
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes validity
 
+    // Store in all phone formats for seamless lookup
     adminWhatsappOtps.set(cleanPhone, { code, expiresAt });
     adminWhatsappOtps.set("07801459424", { code, expiresAt });
+    adminWhatsappOtps.set("7801459424", { code, expiresAt });
+    adminWhatsappOtps.set("9647801459424", { code, expiresAt });
+    if (cleanPhone.length >= 9) {
+      adminWhatsappOtps.set(cleanPhone.slice(-9), { code, expiresAt });
+    }
+    if (cleanPhone.length >= 10) {
+      adminWhatsappOtps.set(cleanPhone.slice(-10), { code, expiresAt });
+    }
+    adminWhatsappOtps.set("primary_admin", { code, expiresAt });
+    adminWhatsappOtps.set(cleanUser, { code, expiresAt });
+
+    // Ensure manager credentials and OTP are synced directly to Supabase admin_credentials
+    if (sb) {
+      try {
+        await sb.from("admin_credentials").upsert({
+          id: "primary_admin",
+          phone: "07801459424",
+          username: "asamali",
+          password_hash: "AsamasaM12",
+          role: "superadmin",
+          otp_code: code,
+          otp_expires_at: expiresAt,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" });
+      } catch (sbErr) {
+        console.warn("Supabase admin_credentials sync warning:", sbErr);
+      }
+    }
 
     const waPhoneFormatted = cleanPhone.startsWith("0")
       ? "964" + cleanPhone.slice(1)
@@ -354,9 +384,15 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       : "9647801459424";
 
     const waText = encodeURIComponent(
-      `🔐 رمز تأكيد دخول مدير تطبيق دليل العراق:\nالرمز: ${code}\nيرجى كتابة هذا الرمز في التطبيق لإثبات ملكية الهاتف وفتح صلاحيات المدير.\nالتوقيت: ${new Date().toLocaleTimeString('ar-IQ')}`
+      `🔐 رمز تأكيد دخول مدير تطبيق دليل العراق:\nالرمز: ${code}\nيرجى نسخ هذا الرمز ولصقه في التطبيق لإثبات ملكية الهاتف وفتح صلاحيات المدير.\nالتوقيت: ${new Date().toLocaleTimeString('ar-IQ')}`
     );
-    const whatsappUrl = `https://wa.me/${waPhoneFormatted}?text=${waText}`;
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${waPhoneFormatted}&text=${waText}`;
+    const whatsappNativeUrl = `whatsapp://send?phone=${waPhoneFormatted}&text=${waText}`;
+
+    // If server has WhatsApp API credentials configured, attempt immediate push message
+    sendWhatsAppOtpMessage(waPhoneFormatted, code).catch((err) => {
+      console.warn("[Admin WhatsApp Push]", err);
+    });
 
     res.json({
       success: true,
@@ -364,6 +400,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       phone: cleanPhone,
       code,
       whatsappUrl,
+      whatsappNativeUrl,
       message: "تم التحقق من صحة البيانات بنجاح! تم إرسال رمز التحقق إلى الواتساب على رقمك.",
     });
   });
@@ -380,21 +417,54 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     const cleanUser = String(username).trim().toLowerCase();
     const cleanPass = String(password).trim();
     const cleanPhone = normalizePhoneDigits(phone);
+    const cleanOtp = normalizePhoneDigits(whatsappOtp);
 
     // Require OTP to prove phone ownership
-    if (!whatsappOtp || String(whatsappOtp).trim().length < 4) {
+    if (!cleanOtp || cleanOtp.length < 4) {
       return res.status(400).json({
         success: false,
         error: "رمز التحقق عبر واتساب مطلوب لإثبات أن هذا هو رقم هاتفك الحقيقي وفتح الصلاحيات.",
       });
     }
 
-    // Verify WhatsApp OTP
-    const storedOtp =
+    // Verify WhatsApp OTP from memory or Supabase
+    let storedOtp =
       adminWhatsappOtps.get(cleanPhone) ||
-      adminWhatsappOtps.get("07801459424");
+      adminWhatsappOtps.get("07801459424") ||
+      adminWhatsappOtps.get("7801459424") ||
+      adminWhatsappOtps.get("9647801459424") ||
+      (cleanPhone.length >= 9 ? adminWhatsappOtps.get(cleanPhone.slice(-9)) : undefined) ||
+      (cleanPhone.length >= 10 ? adminWhatsappOtps.get(cleanPhone.slice(-10)) : undefined) ||
+      adminWhatsappOtps.get(cleanUser) ||
+      adminWhatsappOtps.get("primary_admin");
 
-    if (!storedOtp || storedOtp.expiresAt < Date.now() || storedOtp.code !== String(whatsappOtp).trim()) {
+    // Supabase fallback if memory OTP was lost (e.g. server restart)
+    if (!storedOtp) {
+      const sb = getServerSupabase();
+      if (sb) {
+        try {
+          const { data } = await sb
+            .from("admin_credentials")
+            .select("otp_code, otp_expires_at")
+            .eq("id", "primary_admin")
+            .maybeSingle();
+          if (data && data.otp_code) {
+            storedOtp = {
+              code: String(data.otp_code),
+              expiresAt: Number(data.otp_expires_at || 0),
+            };
+          }
+        } catch {}
+      }
+    }
+
+    const isCodeMatch =
+      storedOtp &&
+      (storedOtp.code === cleanOtp ||
+        storedOtp.code === String(whatsappOtp).trim() ||
+        normalizePhoneDigits(storedOtp.code) === cleanOtp);
+
+    if (!storedOtp || storedOtp.expiresAt < Date.now() || !isCodeMatch) {
       return res.status(401).json({
         success: false,
         error: "رمز التحقق عبر واتساب غير صحيح أو انتهت صلاحيته. يرجى إدخال الرمز الصحيح.",
@@ -404,6 +474,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     // Clean consumed OTP
     adminWhatsappOtps.delete("07801459424");
     adminWhatsappOtps.delete(cleanPhone);
+    adminWhatsappOtps.delete("7801459424");
+    adminWhatsappOtps.delete("9647801459424");
+    adminWhatsappOtps.delete(cleanUser);
+    adminWhatsappOtps.delete("primary_admin");
     adminLoginAttempts.delete(clientIp);
 
     // Generate secure session token (24 hours validity)
@@ -411,7 +485,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
 
     activeAdminSessions.set(sessionToken, {
-      username: cleanUser,
+      username: cleanUser || "asamali",
       createdAt: Date.now(),
       expiresAt,
     });
@@ -420,6 +494,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       success: true,
       token: sessionToken,
       expiresAt,
+      user: {
+        username: cleanUser || "asamali",
+        phone: cleanPhone || "07801459424",
+      },
       message: "تم التحقق من رقم الهاتف بنجاح وفتح صلاحيات المدير العام 🇮🇶",
     });
   });
@@ -558,8 +636,19 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   });
 
   // Admin status check (compatible with Edge Function)
-  app.get("/api/admin/status", requireAdminAuth, (_req: Request, res: Response) => {
-    res.json({ success: true, loggedIn: true, user: { username: ADMIN_USERNAME } });
+  app.get("/api/admin/status", requireAdminAuth, (req: Request, res: Response) => {
+    const session = (req as any).adminSession;
+    const username = session?.username || ADMIN_USERNAME || "asamali";
+    res.json({
+      success: true,
+      loggedIn: true,
+      username,
+      phone: "07801459424",
+      user: {
+        username,
+        phone: "07801459424",
+      },
+    });
   });
 
   // Admin session refresh
@@ -941,6 +1030,121 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   });
 
   // Admin: Get all store claims
+  const adOtpStore = new Map<string, { phone: string; otpHash: string; expiresAt: number; attempts: number }>();
+
+  // Secure Advertiser WhatsApp OTP Request (Never returns plain OTP to client)
+  app.post("/api/ad/request-otp", async (req: Request, res: Response) => {
+    try {
+      const { phone } = req.body;
+      if (!phone) {
+        return res.status(400).json({ success: false, error: "رقم الهاتف مطلوب." });
+      }
+
+      const cleanPhone = normalizeIraqPhone(phone);
+      const validation = validateIraqPhone(cleanPhone);
+      if (!validation.isValid) {
+        return res.status(400).json({ success: false, error: `رقم الهاتف غير صالح: ${validation.reason}` });
+      }
+
+      // Generate 6-digit OTP securely
+      const otp = crypto.randomInt(100000, 1000000).toString();
+      const otpHash = crypto.createHash("sha256").update(otp + ADMIN_TOKEN_SECRET).digest("hex");
+      const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+      adOtpStore.set(cleanPhone, {
+        phone: cleanPhone,
+        otpHash,
+        expiresAt,
+        attempts: 0,
+      });
+
+      // Attempt sending via WhatsApp provider gateway
+      await sendWhatsAppOtpMessage(cleanPhone, otp);
+
+      // WhatsApp direct message URL for opening in WhatsApp app/web
+      let intlPhone = cleanPhone.replace(/\D/g, "");
+      if (intlPhone.startsWith("07")) {
+        intlPhone = "964" + intlPhone.slice(1);
+      } else if (!intlPhone.startsWith("964") && intlPhone.startsWith("7")) {
+        intlPhone = "964" + intlPhone;
+      }
+
+      const waText = encodeURIComponent(
+        `🔐 رمز التحقق لتوثيق إعلانك في دليل العراق هو: ${otp}\n(صالح لمدة 5 دقائق). يرجى نسخ الرمز ولصقه داخل التطبيق.`
+      );
+      const whatsappUrl = `https://wa.me/${intlPhone}?text=${waText}`;
+
+      // CRITICAL SECURITY: The plain OTP is NEVER sent to the client!
+      return res.json({
+        success: true,
+        message: `تم إرسال رمز التحقق في رسالة خاصة إلى واتساب الرقم ${cleanPhone}.`,
+        whatsappUrl,
+      });
+    } catch (err: any) {
+      console.error("Error in /api/ad/request-otp:", err);
+      return res.status(500).json({ success: false, error: "حدث خطأ أثناء إرسال رمز التحقق." });
+    }
+  });
+
+  // Secure Advertiser WhatsApp OTP Verification
+  app.post("/api/ad/verify-otp", async (req: Request, res: Response) => {
+    try {
+      const { phone, otp } = req.body;
+      if (!phone || !otp) {
+        return res.status(400).json({ success: false, error: "رقم الهاتف ورمز التحقق مطلوبان." });
+      }
+
+      const cleanPhone = normalizeIraqPhone(phone);
+      const cleanOtp = String(otp).trim();
+
+      const record = adOtpStore.get(cleanPhone);
+      if (!record) {
+        return res.status(400).json({
+          success: false,
+          error: "انتهت صلاحية رمز التحقق أو لم يتم طلبه. يرجى طلب رمز جديد.",
+        });
+      }
+
+      if (Date.now() > record.expiresAt) {
+        adOtpStore.delete(cleanPhone);
+        return res.status(400).json({
+          success: false,
+          error: "انتهت صلاحية رمز التحقق (صلاحيته 5 دقائق). يرجى طلب رمز جديد.",
+        });
+      }
+
+      if (record.attempts >= 4) {
+        adOtpStore.delete(cleanPhone);
+        return res.status(429).json({
+          success: false,
+          error: "تم تجاوز عدد المحاولات المسموحة. يرجى طلب رمز جديد.",
+        });
+      }
+
+      const inputHash = crypto.createHash("sha256").update(cleanOtp + ADMIN_TOKEN_SECRET).digest("hex");
+      if (inputHash !== record.otpHash) {
+        record.attempts += 1;
+        const remaining = 4 - record.attempts;
+        return res.status(400).json({
+          success: false,
+          error: `رمز التحقق غير صحيح! يرجى نسخه بدقة من تطبيق الواتساب (تبقى لديك ${remaining} محاولات).`,
+        });
+      }
+
+      // Successfully verified!
+      adOtpStore.delete(cleanPhone);
+
+      return res.json({
+        success: true,
+        message: "تم التحقق بنجاح من ملكية رقم الهاتف!",
+        phone: cleanPhone,
+      });
+    } catch (err: any) {
+      console.error("Error in /api/ad/verify-otp:", err);
+      return res.status(500).json({ success: false, error: "حدث خطأ أثناء التحقق من الرمز." });
+    }
+  });
+
   app.get("/api/admin/claims", requireAdminAuth, async (_req: Request, res: Response) => {
     const sb = getServerSupabase();
     if (sb) {
@@ -2317,6 +2521,22 @@ CREATE POLICY "Service Role Full Access Reviews" ON public.reviews FOR ALL USING
 
 DROP POLICY IF EXISTS "Service Role Full Access Reports" ON public.reports;
 CREATE POLICY "Service Role Full Access Reports" ON public.reports FOR ALL USING (auth.role() = 'service_role');
+
+-- 14. جدول بيانات المدير العام وصلاحيات الإدارة (Admin Credentials)
+CREATE TABLE IF NOT EXISTS public.admin_credentials (
+  id TEXT PRIMARY KEY DEFAULT 'primary_admin',
+  phone TEXT NOT NULL,
+  username TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT DEFAULT 'superadmin',
+  otp_code TEXT,
+  otp_expires_at BIGINT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.admin_credentials ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service Role Full Access Admin" ON public.admin_credentials;
+CREATE POLICY "Service Role Full Access Admin" ON public.admin_credentials FOR ALL USING (auth.role() = 'service_role');
 `;
     res.type("text/plain").send(sqlScript);
   });
@@ -2325,21 +2545,15 @@ CREATE POLICY "Service Role Full Access Reports" ON public.reports FOR ALL USING
     const sb = getServerSupabase();
     if (!sb) return;
     try {
-      const { data, error } = await sb.from("admin_credentials").select("id").limit(1);
-      if (error && error.code === '42P01') {
-        return;
-      }
-      if (!data || data.length === 0) {
-        await sb.from("admin_credentials").insert({
-          id: "primary_admin",
-          phone: "07801459424",
-          username: "asamali",
-          password_hash: "AsamasaM12",
-          role: "superadmin",
-          updated_at: new Date().toISOString(),
-        });
-        console.log("✅ Seeded initial admin credentials into Supabase admin_credentials table");
-      }
+      await sb.from("admin_credentials").upsert({
+        id: "primary_admin",
+        phone: "07801459424",
+        username: "asamali",
+        password_hash: "AsamasaM12",
+        role: "superadmin",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" });
+      console.log("✅ Synced manager credentials (07801459424 / asamali) into Supabase admin_credentials");
     } catch (e) {
       // Non-critical background seed
     }

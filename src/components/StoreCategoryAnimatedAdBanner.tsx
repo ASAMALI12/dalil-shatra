@@ -4,18 +4,28 @@ import { DirectoryItem } from '../types/directory';
 
 interface StoreCategoryAnimatedAdBannerProps {
   categoryTitle?: string;
+  categoryId?: string;
+  governorateId?: string;
+  governorateName?: string;
+  districtId?: string;
+  districtName?: string;
   onOpenClaimStoreModal?: (store?: DirectoryItem) => void;
 }
 
 export const StoreCategoryAnimatedAdBanner: React.FC<StoreCategoryAnimatedAdBannerProps> = ({
   categoryTitle,
+  categoryId,
+  governorateId,
+  governorateName,
+  districtId,
+  districtName,
   onOpenClaimStoreModal,
 }) => {
   const [isAdModalOpen, setIsAdModalOpen] = useState(false);
 
   return (
     <>
-      {/* المربع الأزرق لصفحة المتاجر والأقسام بسعر 10 آلاف دينار مع انيميشن ملكي جذاب مختلف كلياً */}
+      {/* المربع الإعلاني لصفحة المتاجر والأقسام بسعر 10 آلاف دينار مع انيميشن ملكي جذاب مختلف كلياً */}
       <div
         onClick={() => setIsAdModalOpen(true)}
         className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-900 via-sky-600 to-indigo-900 p-3.5 sm:p-4.5 text-white shadow-lg shadow-sky-900/30 border border-amber-300/40 cursor-pointer select-none transition-all duration-300 hover:shadow-xl hover:shadow-sky-600/40 active:scale-[0.99] group"
@@ -68,12 +78,18 @@ export const StoreCategoryAnimatedAdBanner: React.FC<StoreCategoryAnimatedAdBann
         </div>
       </div>
 
-      {/* مودال حجز ووضع الإعلان لنطاق المتجر والقسم (10 آلاف) */}
+      {/* مودال حجز ووضع الإعلان لنطاق المتجر والقسم المختار (10 آلاف) */}
       <VerifiedStoreAdModal
         isOpen={isAdModalOpen}
         onClose={() => setIsAdModalOpen(false)}
         onOpenClaimStore={onOpenClaimStoreModal}
         initialScope="store_area"
+        initialCategoryId={categoryId}
+        initialCategoryTitle={categoryTitle}
+        initialGovernorateId={governorateId}
+        initialGovernorateName={governorateName}
+        initialDistrictId={districtId}
+        initialDistrictName={districtName}
       />
     </>
   );

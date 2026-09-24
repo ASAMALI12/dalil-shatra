@@ -42,12 +42,16 @@ import {
   Home,
   MapPin,
   Send,
+  Plus,
+  Settings,
+  LogOut,
+  Crown,
 } from 'lucide-react';
 
 export type NavLevel = 'governorates' | 'districts' | 'stores';
 
 function IraqDirectoryApp() {
-  const { isManagerUnlocked, balance } = useWallet();
+  const { isManagerUnlocked, balance, lockManager } = useWallet();
   const { unreadCount, getUnreadCountForCategory } = useNotification();
   const { items } = useDirectory();
   const {
@@ -857,6 +861,67 @@ function IraqDirectoryApp() {
 
       <div className="mx-auto max-w-md bg-slate-50 min-h-screen shadow-lg border-x border-slate-200/80">
         
+        {/* Manager Superadmin Persistent Top Status Bar */}
+        {isManagerUnlocked && (
+          <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 px-3 py-2 shadow-md border-b-2 border-amber-600/40 animate-in fade-in sticky top-0 z-40">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950 text-amber-400 font-black text-xs shadow-xs shrink-0">
+                  👑
+                </span>
+                <div className="min-w-0">
+                  <span className="font-display text-xs font-black block leading-tight truncate">
+                    وضع المدير العام مفعّل (صلاحيات كاملة) 🇮🇶
+                  </span>
+                  <span className="text-[10px] text-slate-900 font-semibold opacity-90 truncate block">
+                    يمكنك تعديل وحذف الأنشطة والإعلانات مباشرة
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      window.history.pushState({ modal: 'openStore' }, '');
+                    } catch (e) {}
+                    setIsOpenStoreModalOpen(true);
+                  }}
+                  className="flex items-center gap-1 rounded-xl bg-slate-950 hover:bg-slate-900 text-white px-2 py-1 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  <Plus className="h-3.5 w-3.5 text-amber-400" />
+                  <span>إضافة متجر</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      window.history.pushState({ modal: 'managerDashboard' }, '');
+                    } catch (e) {}
+                    setIsManagerDashboardOpen(true);
+                  }}
+                  className="flex items-center gap-1 rounded-xl bg-white/90 hover:bg-white text-slate-900 px-2 py-1 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="لوحة الإعلانات والبلاغات"
+                >
+                  <Settings className="h-3.5 w-3.5 text-slate-900" />
+                  <span className="hidden xs:inline">اللوحة</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => lockManager()}
+                  className="flex items-center justify-center rounded-xl bg-rose-600 hover:bg-rose-700 text-white p-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="قفل صلاحيات المدير"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Top Header matching Screenshot 1 (Curved Sky-Blue Header with Title & Icons) */}
         <header className="sticky top-0 z-30 bg-slate-50/95 backdrop-blur-md px-3 sm:px-4 pt-3 pb-2.5 border-b border-slate-200/60 space-y-2">
           {/* Sky-Blue Brand Header Container matching Screenshot 1 */}
@@ -1045,6 +1110,11 @@ function IraqDirectoryApp() {
                     window.history.pushState({ modal: 'openStore' }, '');
                     setIsOpenStoreModalOpen(true);
                   }}
+                  onEditStore={(store) => {
+                    window.history.pushState({ modal: 'editStore' }, '');
+                    setEditStoreTarget(store);
+                    setIsEditModalOpen(true);
+                  }}
                 />
               )}
             </>
@@ -1114,6 +1184,12 @@ function IraqDirectoryApp() {
         isOpen={isAdModalOpen}
         onClose={() => setIsAdModalOpen(false)}
         initialScope={navLevel === 'stores' ? 'store_area' : navLevel === 'districts' ? 'governorate' : 'national'}
+        initialCategoryId={selectedCategoryId || undefined}
+        initialCategoryTitle={activeCategoryObj?.title || undefined}
+        initialGovernorateId={selectedGovernorateId}
+        initialGovernorateName={activeGovernorate?.name}
+        initialDistrictId={selectedDistrictId}
+        initialDistrictName={selectedDistrictName}
       />
 
       {/* Open Store Modal */}

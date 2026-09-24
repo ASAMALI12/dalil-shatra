@@ -46,6 +46,7 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
   const [category, setCategory] = useState('restaurants');
   const [phone, setPhone] = useState('');
   const [referenceCode, setReferenceCode] = useState('');
+  const [detailsError, setDetailsError] = useState('');
   const [paymentError, setPaymentError] = useState('');
 
   if (!isOpen) return null;
@@ -539,6 +540,14 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
           )}
         </div>
 
+        {/* Validation Error Banner */}
+        {detailsError && step === 'details' && (
+          <div className="px-4 py-2 bg-rose-50 border-t border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>{detailsError}</span>
+          </div>
+        )}
+
         {/* Footer Navigation Buttons */}
         <div className="border-t border-slate-200 p-4 bg-slate-50 flex items-center justify-between">
           {step !== 'success' ? (
@@ -546,7 +555,10 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
               {step !== 'plan' ? (
                 <button
                   type="button"
-                  onClick={() => setStep(step === 'payment' ? 'details' : 'plan')}
+                  onClick={() => {
+                    setDetailsError('');
+                    setStep(step === 'payment' ? 'details' : 'plan');
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 font-display text-xs font-bold text-slate-700 hover:bg-slate-100 transition-all cursor-pointer"
                 >
                   السابق
@@ -558,7 +570,10 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
               {step === 'plan' && (
                 <button
                   type="button"
-                  onClick={() => setStep('details')}
+                  onClick={() => {
+                    setDetailsError('');
+                    setStep('details');
+                  }}
                   className="flex items-center gap-2 rounded-xl bg-red-600 px-6 py-2.5 font-display text-xs font-bold text-white shadow-md hover:bg-red-700 active:scale-95 transition-all cursor-pointer"
                 >
                   <span>متابعة إدخال البيانات</span>
@@ -571,9 +586,10 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
                   type="button"
                   onClick={() => {
                     if (!businessName.trim() || !headline.trim() || !phone.trim()) {
-                      alert('يرجى ملء كافة حقول الإعلان (اسم المحل، عنوان الإعلان، ورقم هاتف التواصل) أولاً للمتابعة لخطوة الدفع');
+                      setDetailsError('يرجى ملء كافة حقول الإعلان (اسم المحل، عنوان الإعلان، ورقم هاتف التواصل) أولاً للمتابعة لخطوة الدفع');
                       return;
                     }
+                    setDetailsError('');
                     setStep('payment');
                   }}
                   className="flex items-center gap-2 rounded-xl bg-red-600 px-6 py-2.5 font-display text-xs font-bold text-white shadow-md hover:bg-red-700 active:scale-95 transition-all cursor-pointer"

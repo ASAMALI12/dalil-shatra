@@ -1,15 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Sparkles,
-  Phone,
-  MessageCircle,
-  Clock,
-  ChevronRight,
-  ChevronLeft,
-  Crown,
-  PlusCircle,
-  MapPin,
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Crown, Sparkles, ChevronRight, ChevronLeft } from 'lucide-react';
 import { CategoryAd } from '../types/shatrah';
 import { CinematicAdBillboard } from './CinematicAdBillboard';
 
@@ -26,41 +16,23 @@ export const CategoryVipAdBanner: React.FC<CategoryVipAdBannerProps> = ({
   ads,
   districtName,
   categoryName,
-  categoryIcon,
   onOpenBookingModal,
   onSelectStorePhone,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [progressPercent, setProgressPercent] = useState(0);
 
   // When ads change or re-filter, reset index safely
   useEffect(() => {
     setCurrentIndex(0);
-    setProgressPercent(0);
   }, [ads.length, districtName, categoryName]);
 
-  // 15-second rotation timer: User specified: "15 ثانيه للاعلان ويضهر الذب بعده بالدور للحاجزين ثم يعود للاول وهكذا"
-  const ROTATION_SECONDS = 15;
-
+  // 12-second rotation timer between multiple booked advertisers
   useEffect(() => {
-    if (ads.length <= 1) {
-      setProgressPercent(0);
-      return;
-    }
-
-    const intervalMs = 100; // Update progress bar every 100ms
-    const stepIncrement = 100 / ((ROTATION_SECONDS * 1000) / intervalMs);
+    if (ads.length <= 1) return;
 
     const timer = setInterval(() => {
-      setProgressPercent((prev) => {
-        if (prev >= 100) {
-          // Switch to next ad in circular order!
-          setCurrentIndex((idx) => (idx + 1) % ads.length);
-          return 0;
-        }
-        return prev + stepIncrement;
-      });
-    }, intervalMs);
+      setCurrentIndex((prev) => (prev + 1) % ads.length);
+    }, 12000);
 
     return () => clearInterval(timer);
   }, [ads.length, currentIndex]);
@@ -70,41 +42,28 @@ export const CategoryVipAdBanner: React.FC<CategoryVipAdBannerProps> = ({
   const handleNext = () => {
     if (ads.length <= 1) return;
     setCurrentIndex((prev) => (prev + 1) % ads.length);
-    setProgressPercent(0);
   };
 
   const handlePrev = () => {
     if (ads.length <= 1) return;
     setCurrentIndex((prev) => (prev - 1 + ads.length) % ads.length);
-    setProgressPercent(0);
   };
 
   // If no ads exist in this category and district yet, show the attractive booking invitation
   if (ads.length === 0) {
     return (
-      <div className="relative overflow-hidden rounded-2xl border border-amber-300/80 bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 p-4 shadow-xs">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-right">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-md shadow-amber-500/20">
-              <Crown className="h-6 w-6 text-white animate-pulse" />
-              <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] text-white">
-                ✓
-              </span>
+      <div className="relative overflow-hidden rounded-2xl border border-amber-300/80 bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-amber-500/10 p-3 shadow-xs">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white shadow-sm">
+              <Crown className="h-5 w-5 text-white animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center justify-center sm:justify-start gap-1.5 mb-0.5">
-                <span className="text-xs font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-200">
-                  فرصة إعلانية في {districtName}
-                </span>
-                <span className="text-[11px] font-extrabold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
-                  5 آلاف د.ع / يوم
-                </span>
+              <div className="text-xs font-bold text-amber-900">
+                فرصة تصدر قسم {categoryName} في {districtName} 👑
               </div>
-              <h4 className="font-display text-sm font-extrabold text-slate-900 leading-snug">
-                كن أول متجر يظهر في صدارة {categoryName} بـ {districtName}!
-              </h4>
-              <p className="text-[11px] text-slate-600 font-medium">
-                إعلانك يظهر لجميع زوار {districtName} بتاثيرات إعلانية مميزة وأزرار اتصال فوري.
+              <p className="text-[11px] text-slate-600">
+                ضع إعلان متجرك في الصدارة لمدة 5 أيام
               </p>
             </div>
           </div>
@@ -112,148 +71,74 @@ export const CategoryVipAdBanner: React.FC<CategoryVipAdBannerProps> = ({
           <button
             type="button"
             onClick={onOpenBookingModal}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 px-4 py-2.5 text-xs font-bold text-white shadow-sm shadow-amber-500/20 transition-all cursor-pointer active:scale-95 flex-shrink-0 w-full sm:w-auto"
+            className="shrink-0 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 hover:from-amber-700 hover:to-rose-700 text-white font-extrabold text-xs px-3.5 py-2 shadow-sm transition-all active:scale-95 cursor-pointer"
           >
-            <PlusCircle className="h-4 w-4" />
-            <span>احجز إعلانك هنا</span>
+            احجز إعلانك الآن
           </button>
         </div>
       </div>
     );
   }
 
-  // When ads are present: Render high-impact VIP rotating carousel
-  const cleanPhone = activeAd.phone.replace(/[^0-9]/g, '');
-  const cleanWhatsapp = (activeAd.whatsapp || activeAd.phone).replace(/[^0-9]/g, '');
-
+  // Active Ad: Direct, Sleek, Unobstructed Real Billboard Rectangle
   return (
-    <div className="relative space-y-2">
-      {/* Outer Banner Card with Radiant Advertising Glow & Animated Border */}
-      <div className="relative overflow-hidden rounded-3xl border-2 border-amber-400/90 bg-gradient-to-b from-amber-50/60 via-white to-rose-50/40 p-3.5 sm:p-4 shadow-md shadow-amber-500/10 transition-all">
-        {/* Animated ambient background sheen */}
-        <div className="pointer-events-none absolute -top-16 -right-16 h-36 w-36 rounded-full bg-gradient-to-br from-amber-300/30 to-rose-300/20 blur-2xl" />
+    <div className="relative w-full space-y-1.5">
+      <CinematicAdBillboard
+        businessName={activeAd.businessName}
+        headline={activeAd.headline || activeAd.businessName}
+        description={activeAd.description}
+        images={
+          activeAd.images && activeAd.images.length > 0
+            ? activeAd.images
+            : activeAd.imageUrl
+            ? [activeAd.imageUrl]
+            : []
+        }
+        phone={activeAd.phone}
+        scope={activeAd.scope}
+        governorateName={activeAd.governorateName}
+        districtName={districtName}
+        categoryName={categoryName}
+        aiStyleId={((activeAd.aiStyle as any)?.lightingTheme as any) || 'ticker-bottom-white'}
+        onCall={() => onSelectStorePhone?.(activeAd.phone)}
+      />
 
-        {/* Top Header Row: VIP Badge, Rotation Timer Indicator, Dots & Actions */}
-        <div className="relative z-10 flex items-center justify-between gap-2 pb-2.5 border-b border-amber-200/70">
-          {/* VIP Badge */}
+      {/* Multiple Ads Indicator & Switcher */}
+      {ads.length > 1 && (
+        <div className="flex items-center justify-between px-1 text-[10px] text-slate-500 font-bold">
+          <div className="flex items-center gap-1">
+            {ads.map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setCurrentIndex(idx)}
+                className={`h-1 rounded-full transition-all cursor-pointer ${
+                  idx === currentIndex ? 'w-4 bg-amber-500' : 'w-1.5 bg-slate-300'
+                }`}
+                title={`إعلان ${idx + 1}`}
+              />
+            ))}
+          </div>
+
           <div className="flex items-center gap-1.5">
-            <span className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 px-2 py-0.5 text-[11px] font-black text-white shadow-xs">
-              <Crown className="h-3 w-3 text-amber-200 fill-amber-200" />
-              <span>إعلان مميز في صدارة {categoryName}</span>
-            </span>
-          </div>
-
-          {/* Rotation info & controls */}
-          <div className="flex items-center gap-2">
-            {ads.length > 1 && (
-              <div className="flex items-center gap-1 bg-amber-100/90 text-amber-900 border border-amber-300/80 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                <Clock className="h-3 w-3 text-amber-700 animate-spin" />
-                <span>
-                  {currentIndex + 1} من {ads.length} • كل {ROTATION_SECONDS} ثانية
-                </span>
-              </div>
-            )}
-
-            {/* Manual Next / Prev arrows for smooth browsing */}
-            {ads.length > 1 && (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handlePrev}
-                  className="flex h-6 w-6 items-center justify-center rounded-lg bg-white hover:bg-amber-100 text-slate-700 border border-slate-200 shadow-2xs cursor-pointer transition-all active:scale-95"
-                  title="الإعلان السابق"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="flex h-6 w-6 items-center justify-center rounded-lg bg-white hover:bg-amber-100 text-slate-700 border border-slate-200 shadow-2xs cursor-pointer transition-all active:scale-95"
-                  title="الإعلان التالي"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
+            <span>إعلان {currentIndex + 1} من {ads.length}</span>
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="p-0.5 rounded text-slate-600 hover:text-black cursor-pointer"
+            >
+              <ChevronRight className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              className="p-0.5 rounded text-slate-600 hover:text-black cursor-pointer"
+            >
+              <ChevronLeft className="h-3 w-3" />
+            </button>
           </div>
         </div>
-
-        {/* 15-Second Rotation Progress Bar when multiple ads exist */}
-        {ads.length > 1 && (
-          <div className="relative h-1 w-full overflow-hidden rounded-full bg-amber-200/50 mt-1 mb-2">
-            <div
-              className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-100 ease-linear rounded-full"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-        )}
-
-        {/* Main Ad Content rendered as a Luxurious Cinematic Billboard */}
-        <div className="relative z-10 pt-1">
-          <CinematicAdBillboard
-            businessName={activeAd.businessName}
-            headline={activeAd.headline || activeAd.businessName}
-            description={activeAd.description}
-            images={
-              activeAd.images && activeAd.images.length > 0
-                ? activeAd.images
-                : activeAd.imageUrl
-                ? [activeAd.imageUrl]
-                : []
-            }
-            phone={activeAd.phone}
-            whatsapp={activeAd.whatsapp || activeAd.phone}
-            offerBadge={activeAd.offerBadge || 'إعلان VIP صدارة 👑'}
-            governorateName="عموم العراق"
-            districtName={districtName}
-            categoryName={categoryName}
-            aiStyle={activeAd.aiStyle as any}
-            lightingTheme={((activeAd.aiStyle as any)?.lightingTheme as any) || 'gold'}
-            variant="billboard"
-            onCall={() => onSelectStorePhone?.(activeAd.phone)}
-          />
-        </div>
-
-        {/* Bottom Bar inside Card: Pagination Indicators & "احجز إعلانك هنا بـ 5 آلاف/يوم" button */}
-        <div className="relative z-10 flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-amber-200/70">
-          {/* Dots Indicator */}
-          {ads.length > 1 ? (
-            <div className="flex items-center gap-1.5">
-              {ads.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setCurrentIndex(idx);
-                    setProgressPercent(0);
-                  }}
-                  className={`h-2 rounded-full transition-all cursor-pointer ${
-                    idx === currentIndex
-                      ? 'w-6 bg-amber-600'
-                      : 'w-2 bg-amber-300 hover:bg-amber-400'
-                  }`}
-                  title={`إعلان رقم ${idx + 1}`}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
-              <Sparkles className="h-3 w-3 text-amber-600" />
-              <span>إعلان حصري في {districtName}</span>
-            </div>
-          )}
-
-          {/* Quick Book Button to join the rotating ads */}
-          <button
-            type="button"
-            onClick={onOpenBookingModal}
-            className="flex items-center gap-1 text-[11px] font-extrabold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg border border-amber-300/80 transition-all cursor-pointer active:scale-95"
-          >
-            <PlusCircle className="h-3.5 w-3.5 text-amber-700" />
-            <span>احجز إعلانك هنا</span>
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

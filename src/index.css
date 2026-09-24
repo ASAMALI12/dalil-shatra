@@ -21,3 +21,126 @@
   scrollbar-width: none;
 }
 
+/* Smooth continuous marquee ticker for animated transparent ad text */
+@keyframes billboard-marquee {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes billboard-marquee-reverse {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes billboard-slide-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-80%);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(40%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(90%);
+  }
+}
+
+@keyframes billboard-slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(90%);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(30%);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(-20%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90%);
+  }
+}
+
+@keyframes billboard-center-zoom {
+  0%, 100% {
+    transform: scale(0.92);
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 16px rgba(255,255,255,0.9));
+  }
+}
+
+@keyframes billboard-corner-glide {
+  0% {
+    transform: translate(-20%, -15%);
+  }
+  25% {
+    transform: translate(20%, -15%);
+  }
+  50% {
+    transform: translate(20%, 20%);
+  }
+  75% {
+    transform: translate(-20%, 20%);
+  }
+  100% {
+    transform: translate(-20%, -15%);
+  }
+}
+
+.animate-billboard-ticker {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: billboard-marquee 15s linear infinite;
+}
+
+.animate-billboard-ticker-top {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: billboard-marquee-reverse 15s linear infinite;
+}
+
+.animate-billboard-slide-down {
+  animation: billboard-slide-down 6s ease-in-out infinite;
+}
+
+.animate-billboard-slide-up {
+  animation: billboard-slide-up 6s ease-in-out infinite;
+}
+
+.animate-billboard-center-zoom {
+  animation: billboard-center-zoom 4s ease-in-out infinite;
+}
+
+.animate-billboard-corner-glide {
+  animation: billboard-corner-glide 10s ease-in-out infinite;
+}
+
+.animate-billboard-ticker:hover,
+.animate-billboard-ticker-top:hover,
+.animate-billboard-slide-down:hover,
+.animate-billboard-slide-up:hover,
+.animate-billboard-center-zoom:hover,
+.animate-billboard-corner-glide:hover {
+  animation-play-state: paused;
+}
+

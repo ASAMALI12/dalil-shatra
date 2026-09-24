@@ -5,34 +5,29 @@ import {
   Phone,
   MessageCircle,
   CreditCard,
-  CheckCircle2,
   AlertCircle,
   Sparkles,
   ArrowRight,
   Upload,
   Copy,
   Check,
-  Building,
-  ShieldCheck,
-  Tag,
-  Clock,
   Send,
-  Eye,
   Trash2,
-  Smartphone,
   Plus,
-  Palette,
-  Type,
-  Activity,
-  Maximize2,
-  Wand2,
+  CheckCircle,
+  RefreshCw,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { CinematicAdBillboard } from './CinematicAdBillboard';
+import {
+  CinematicAdBillboard,
+  AI_BILLBOARD_STYLES,
+} from './CinematicAdBillboard';
+import { CIRCULAR_CATEGORIES } from './StoresCircularView';
 import { useDirectory } from '../context/DirectoryContext';
 import { useCategoryAds } from '../context/CategoryAdsContext';
 import { useWallet } from '../context/WalletContext';
-import { useNotification } from '../context/NotificationContext';
 import { DirectoryItem } from '../types/directory';
 import { safeApiFetch } from '../utils/apiClient';
 
@@ -41,6 +36,12 @@ interface VerifiedStoreAdModalProps {
   onClose: () => void;
   onOpenClaimStore?: (store?: DirectoryItem) => void;
   initialScope?: 'national' | 'governorate' | 'store_area';
+  initialCategoryId?: string;
+  initialCategoryTitle?: string;
+  initialGovernorateId?: string;
+  initialGovernorateName?: string;
+  initialDistrictId?: string;
+  initialDistrictName?: string;
 }
 
 export interface DurationTier {
@@ -51,17 +52,19 @@ export interface DurationTier {
   priceText: string;
   badge: string;
   scope: 'national' | 'governorate' | 'store_area';
+  description: string;
 }
 
 export const DURATION_TIERS: DurationTier[] = [
   {
-    id: 'tier-national',
+    id: 'tier-store',
     days: 5,
-    label: '5 أيام (عموم العراق 🇮🇶)',
-    price: 25000,
-    priceText: '25,000 د.ع',
-    badge: 'عموم العراق 🇮🇶',
-    scope: 'national',
+    label: '5 أيام (صدارة القسم والمنطقة)',
+    price: 10000,
+    priceText: '10,000 د.ع',
+    badge: 'صدارة القسم 👑',
+    scope: 'store_area',
+    description: 'يتصدر إعلانك أعلى صفحة القسم المحدد في مدينتك',
   },
   {
     id: 'tier-gov',
@@ -71,70 +74,68 @@ export const DURATION_TIERS: DurationTier[] = [
     priceText: '15,000 د.ع',
     badge: 'مدن المحافظة 🏛️',
     scope: 'governorate',
+    description: 'يظهر إعلانك في صدارة جميع أقضية ومدن محافظتك',
   },
   {
-    id: 'tier-store',
+    id: 'tier-national',
     days: 5,
-    label: '5 أيام (المنطقة وصدارة القسم)',
-    price: 10000,
-    priceText: '10,000 د.ع',
-    badge: 'صدارة القسم 👑',
-    scope: 'store_area',
+    label: '5 أيام (عموم العراق 🇮🇶)',
+    price: 25000,
+    priceText: '25,000 د.ع',
+    badge: 'عموم العراق 🇮🇶',
+    scope: 'national',
+    description: 'يظهر إعلانك في الشاشة الرئيسية لجميع مستخدمي دليل العراق',
   },
 ];
 
 export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
   isOpen,
   onClose,
-  onOpenClaimStore,
-  initialScope = 'national',
+  initialScope = 'store_area',
+  initialCategoryId,
+  initialCategoryTitle,
+  initialGovernorateId,
+  initialGovernorateName,
+  initialDistrictId,
+  initialDistrictName,
 }) => {
   const { items, claimedStoreIds, isUserStoreOwner } = useDirectory();
-  const { submitAdForApproval, addCategoryAd } = useCategoryAds();
+  const { submitAdForApproval } = useCategoryAds();
   const { isManagerUnlocked } = useWallet();
-  const { broadcastNotification } = useNotification();
 
-  // Find stores verified/claimed by this user
-  const verifiedUserStores = useMemo(() => {
-    return items.filter(
-      (store) =>
-        claimedStoreIds.includes(store.id) ||
-        isUserStoreOwner(store.id) ||
-        (store.claimedByPhone && store.phoneReliability === 'otp_verified')
-    );
-  }, [items, claimedStoreIds, isUserStoreOwner]);
-
-  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [selectedTierId, setSelectedTierId] = useState<string>(() => {
     if (initialScope === 'governorate') return 'tier-gov';
-    if (initialScope === 'store_area') return 'tier-store';
-    return 'tier-national';
+    if (initialScope === 'national') return 'tier-national';
+    return 'tier-store';
   });
 
-  // Step state: 'form' | 'preview_modal' | 'payment' | 'success'
-  const [step, setStep] = useState<'form' | 'payment' | 'success'>('form');
-  const [isPreviewActive, setIsPreviewActive] = useState<boolean>(true);
-  const [previewVariant, setPreviewVariant] = useState<'billboard' | 'story'>('billboard');
-  const [lightingTheme, setLightingTheme] = useState<'gold' | 'neon-blue' | 'emerald' | 'sunset' | 'purple'>('gold');
-  const [currentPreviewImageIdx, setCurrentPreviewImageIdx] = useState(0);
+  const [targetCategoryId, setTargetCategoryId] = useState<string>(() => {
+    return initialCategoryId || 'restaurants';
+  });
 
-  // Core Form Fields
-  const [businessName, setBusinessName] = useState('');
+  // Flow Step: 'create' | 'otp_verify' | 'payment' | 'success'
+  const [step, setStep] = useState<'create' | 'otp_verify' | 'payment' | 'success'>('create');
+
+  // ONLY THE REQUESTED FIELDS:
+  // 1. Photos (1 to 5)
+  // 2. Description (free text)
+  // 3. Phone (single phone number)
+  const [images, setImages] = useState<string[]>([]);
   const [adDescription, setAdDescription] = useState('');
   const [adPhone, setAdPhone] = useState('');
-  const [adWhatsapp, setAdWhatsapp] = useState('');
-  const [offerBadge, setOfferBadge] = useState('عرض حصري 👑');
-
-  // Images Gallery (Up to 5 images)
-  const [images, setImages] = useState<string[]>([]);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
 
-  // AI Design Studio State
-  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large' | 'huge'>('medium');
-  const [textColor, setTextColor] = useState<string>('#FFFFFF');
-  const [bgColor, setBgColor] = useState<string>('gradient-navy');
-  const [animationType, setAnimationType] = useState<'pulse' | 'slide' | 'glow' | 'subtle'>('glow');
-  const [isAiGeneratingCopy, setIsAiGeneratingCopy] = useState(false);
+  // OTP Verification State
+  const [verifiedPhones, setVerifiedPhones] = useState<string[]>([]);
+  const [whatsappDirectUrl, setWhatsappDirectUrl] = useState<string>('');
+  const [otpInput, setOtpInput] = useState<string>('');
+  const [otpError, setOtpError] = useState<string>('');
+  const [resendTimer, setResendTimer] = useState<number>(0);
+  const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
+
+  // AI Style cycling
+  const [currentAiStyleIndex, setCurrentAiStyleIndex] = useState(0);
+  const [isAiGeneratingStyle, setIsAiGeneratingStyle] = useState(false);
 
   // Payment Form State
   const [paymentMethod, setPaymentMethod] = useState<'zaincash' | 'mastercard'>('zaincash');
@@ -143,11 +144,20 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Official Accounts (secured from backend/Supabase with fallbacks)
+  // Payment accounts
   const [paymentAccounts, setPaymentAccounts] = useState({
     zaincash: '07801459424',
     mastercard: '4538548308',
   });
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+    const timer = setInterval(() => {
+      setResendTimer((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendTimer]);
 
   useEffect(() => {
     if (isOpen) {
@@ -165,220 +175,269 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
     }
   }, [isOpen]);
 
-  // Active store object
-  const activeSelectedStore = useMemo(() => {
-    if (selectedStoreId) {
-      return items.find((s) => s.id === selectedStoreId) || null;
-    }
-    if (verifiedUserStores.length > 0) {
-      return verifiedUserStores[0];
-    }
-    return null;
-  }, [selectedStoreId, items, verifiedUserStores]);
+  const currentCategoryObj = useMemo(() => {
+    return (
+      CIRCULAR_CATEGORIES.find((c) => c.id === targetCategoryId) || {
+        id: 'restaurants',
+        title: 'المطاعم والمأكولات',
+        icon: '🍽️',
+      }
+    );
+  }, [targetCategoryId]);
 
-  // Sync initial scope and store defaults
   useEffect(() => {
     if (isOpen) {
       if (initialScope === 'governorate') {
         setSelectedTierId('tier-gov');
-      } else if (initialScope === 'store_area') {
-        setSelectedTierId('tier-store');
-      } else {
+      } else if (initialScope === 'national') {
         setSelectedTierId('tier-national');
+      } else {
+        setSelectedTierId('tier-store');
       }
 
-      if (verifiedUserStores.length > 0 && !selectedStoreId) {
-        const first = verifiedUserStores[0];
-        setSelectedStoreId(first.id);
-        setBusinessName(first.name);
-        setAdDescription(first.description || `تفضلوا بزيارة ${first.name} للاستفادة من أحدث العروض والخدمات.`);
-        setAdPhone(first.phone || '');
-        setAdWhatsapp(first.phone || '');
-        if (first.imageUrl && images.length === 0) {
-          setImages([first.imageUrl]);
-        }
-      }
-      setStep('form');
-      setIsPreviewActive(false);
-      setErrorMessage('');
-      setReceiptImage('');
-      setTransactionRef('');
-    }
-  }, [isOpen, initialScope, verifiedUserStores]);
-
-  const selectedTier = DURATION_TIERS.find((t) => t.id === selectedTierId) || DURATION_TIERS[0];
-
-  // Store selection handler
-  const handleStoreSelect = (storeId: string) => {
-    setSelectedStoreId(storeId);
-    const found = items.find((s) => s.id === storeId);
-    if (found) {
-      setBusinessName(found.name);
-      setAdDescription(found.description || `تفضلوا بزيارة ${found.name} للاستفادة من أحدث العروض.`);
-      setAdPhone(found.phone || '');
-      setAdWhatsapp(found.phone || '');
-      if (found.imageUrl && images.length === 0) {
-        setImages([found.imageUrl]);
+      if (initialCategoryId) {
+        setTargetCategoryId(initialCategoryId);
       }
     }
-  };
+  }, [isOpen, initialScope, initialCategoryId]);
 
-  // Image Upload Handler (up to 5 images)
+  const selectedTier = useMemo(() => {
+    return DURATION_TIERS.find((t) => t.id === selectedTierId) || DURATION_TIERS[0];
+  }, [selectedTierId]);
+
+  const activeAiStyle = AI_BILLBOARD_STYLES[currentAiStyleIndex % AI_BILLBOARD_STYLES.length];
+
+  // Check if current phone is already verified
+  const isCurrentPhoneVerified = useMemo(() => {
+    const clean = adPhone.replace(/\D/g, '');
+    if (!clean || clean.length < 8) return false;
+
+    // Check session verified phones
+    if (verifiedPhones.includes(clean)) return true;
+
+    // Check directory items for claimed/verified stores
+    return items.some((s) => {
+      const p1 = s.phone?.replace(/\D/g, '');
+      const p2 = s.claimedByPhone?.replace(/\D/g, '');
+      const matchesPhone = p1 === clean || p2 === clean;
+      const isVerified =
+        s.isClaimed ||
+        s.phoneReliability === 'otp_verified' ||
+        claimedStoreIds.includes(s.id) ||
+        isUserStoreOwner(s.id);
+      return matchesPhone && isVerified;
+    });
+  }, [adPhone, verifiedPhones, items, claimedStoreIds, isUserStoreOwner]);
+
+  // Image upload handler (Up to 5 images)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (images.length >= 5) {
-      setErrorMessage('الحد الأقصى للصور هو 5 صور لكل إعلان.');
-      return;
-    }
-
     setImageUploadLoading(true);
-    setErrorMessage('');
+    const filesToRead = Array.from(files).slice(0, 5 - images.length);
 
-    const remainingSlots = 5 - images.length;
-    const filesToRead = Array.from(files).slice(0, remainingSlots);
-
-    let loadedCount = 0;
-    const newImgs: string[] = [];
-
-    filesToRead.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          newImgs.push(event.target.result as string);
-        }
-        loadedCount++;
-        if (loadedCount === filesToRead.length) {
-          setImages((prev) => [...prev, ...newImgs].slice(0, 5));
-          setImageUploadLoading(false);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    Promise.all(
+      filesToRead.map((file) => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            resolve(event.target?.result as string);
+          };
+          reader.readAsDataURL(file);
+        });
+      })
+    )
+      .then((base64List) => {
+        setImages((prev) => [...prev, ...base64List].slice(0, 5));
+        setImageUploadLoading(false);
+      })
+      .catch(() => {
+        setImageUploadLoading(false);
+      });
   };
 
-  // Remove image from gallery
-  const handleRemoveImage = (index: number) => {
-    setImages((prev) => prev.filter((_, idx) => idx !== index));
-    if (currentPreviewImageIdx >= images.length - 1) {
-      setCurrentPreviewImageIdx(Math.max(0, images.length - 2));
-    }
+  const handleRemoveImage = (indexToRemove: number) => {
+    setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  // Receipt image upload
-  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (ev.target?.result) {
-        setReceiptImage(ev.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Copy helper
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedAccount(text);
-    setTimeout(() => setCopiedAccount(null), 2500);
-  };
-
-  // AI Copy Enhancement feature
-  const handleAiEnhanceCopy = () => {
-    setIsAiGeneratingCopy(true);
+  // Magic AI Button: Generates and cycles billboard designs until user is pleased
+  const handleGenerateAiBillboard = () => {
+    setIsAiGeneratingStyle(true);
     setTimeout(() => {
-      const storeName = businessName.trim() || 'متجرنا';
-      const enhancements = [
-        `✨ عروض استثنائية وتخفيضات كبرى لدى ${storeName}! تفضلوا بزيارتنا أو تواصلوا مباشرة واستفيدوا من أقوى الخصومات والخدمات الحصرية التي لا تُفوّت.`,
-        `👑 الجودة والتميز يجتمعان في ${storeName}! تشكيلة واسعة بأسعار تنافسية تلبي كافة احتياجاتكم مع خدمة سريعة وضمان حقيقي. سارعوا بالتواصل الآن!`,
-        `🔥 مفاجآت وعروض حصرية لا تنتهي لدى ${storeName}! يسعدنا استقبالكم وتقديم أفضل العروض الخاصة في مدينتكم. اطلبوا الآن وتمتعوا بأفضل تجربة!`,
-      ];
-      const randomEnhanced = enhancements[Math.floor(Math.random() * enhancements.length)];
-      setAdDescription(randomEnhanced);
-      setIsAiGeneratingCopy(false);
-    }, 700);
+      // Cycle to next style
+      setCurrentAiStyleIndex((prev) => (prev + 1) % AI_BILLBOARD_STYLES.length);
+
+      // AI polish / suggestions if description is short or empty
+      if (!adDescription.trim()) {
+        const categoryTitle = currentCategoryObj.title;
+        const suggestions = [
+          `أهلاً بكم! نسعد بزيارتكم وخدمتكم بأفضل جودة وأرقى المعايير في عالم ${categoryTitle}.`,
+          `عرض خاص وحصري! تفضلوا بزيارتنا للاستمتاع بأرقى الخدمات والأسعار المناسبة.`,
+          `نسعد بخدمتكم وتلبية كافة طلباتكم يومياً، أهلاً وسهلاً بالجميع.`,
+        ];
+        setAdDescription(suggestions[Math.floor(Math.random() * suggestions.length)]);
+      }
+
+      setIsAiGeneratingStyle(false);
+    }, 250);
   };
 
-  // Proceed to Payment screen
-  const handleGoToPayment = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Send WhatsApp OTP function via secure server endpoint
+  const triggerSendOtp = (targetPhone: string) => {
+    setIsSendingOtp(true);
+    setOtpError('');
+    setOtpInput('');
+    setResendTimer(60);
+
+    // Call secure server OTP endpoint (server generates OTP cryptographically and sends to WhatsApp)
+    safeApiFetch('/api/ad/request-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: targetPhone,
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (data && data.success) {
+          if (data.whatsappUrl) {
+            setWhatsappDirectUrl(data.whatsappUrl);
+          }
+        } else {
+          setOtpError(data?.error || 'تعذر إرسال رمز التحقق عبر الواتساب حالياً. يرجى المحاولة بعد قليل.');
+        }
+      })
+      .catch(() => {
+        setOtpError('فشل الاتصال بالخادم لإرسال رمز التحقق.');
+      })
+      .finally(() => {
+        setIsSendingOtp(false);
+      });
+  };
+
+  // Step 1 -> Validation and routing to OTP Verification or Payment
+  const handleProceedFromCreate = () => {
     setErrorMessage('');
+    const cleanPhone = adPhone.replace(/\D/g, '');
 
-    if (!businessName.trim()) {
-      setErrorMessage('يرجى إدخال اسم المتجر أو النشاط التجاري!');
+    if (!adPhone.trim() || cleanPhone.length < 8) {
+      setErrorMessage('يرجى إدخال رقم هاتف صحيح للتواصل المباشر والتوثيق!');
       return;
     }
-
     if (!adDescription.trim()) {
-      setErrorMessage('يرجى كتابة تفاصيل وعروض الإعلان التجاري!');
+      setErrorMessage('يرجى كتابة وصف للإعلان في مربع الوصف!');
       return;
     }
 
-    if (!adPhone.trim()) {
-      setErrorMessage('يرجى إدخال رقم هاتف التواصل مع المتجر!');
+    // STRICT CHECK: If phone is not verified, require WhatsApp OTP verification before payment!
+    if (!isCurrentPhoneVerified) {
+      triggerSendOtp(adPhone.trim());
+      setStep('otp_verify');
       return;
     }
 
+    // Phone already verified -> go to payment
     setStep('payment');
   };
 
-  // Final Publish Submission -> Sends to Manager Dashboard
+  // Step 2 -> Verify OTP submitted by user against server hash
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOtpError('');
+
+    const cleanInput = otpInput.trim();
+    if (cleanInput.length !== 6) {
+      setOtpError('يرجى إدخال رمز التحقق المكون من 6 أرقام بالكامل.');
+      return;
+    }
+
+    setIsSendingOtp(true);
+    try {
+      const res = await safeApiFetch('/api/ad/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: adPhone.trim(),
+          otp: cleanInput,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      setIsSendingOtp(false);
+
+      if (!res.ok || !data?.success) {
+        setOtpError(data?.error || 'رمز التحقق غير صحيح أو انتهت صلاحيته. يرجى التأكد من الرسالة في الواتساب.');
+        return;
+      }
+
+      // Mark phone as verified
+      const cleanPhone = adPhone.replace(/\D/g, '');
+      setVerifiedPhones((prev) => [...prev, cleanPhone]);
+
+      confetti({
+        particleCount: 70,
+        spread: 60,
+        origin: { y: 0.6 },
+      });
+
+      // Successfully verified -> advance to payment!
+      setStep('payment');
+    } catch {
+      setIsSendingOtp(false);
+      setOtpError('تعذر الاتصال بالخادم للتحقق من الرمز.');
+    }
+  };
+
+  // Step 3 -> Final Publish Submission
   const handleConfirmAndPublish = () => {
     setErrorMessage('');
 
     if (!receiptImage && !transactionRef.trim() && !isManagerUnlocked) {
-      setErrorMessage('يرجى إرفاق صورة وصل التحويل أو إدخال رقم الإشعار لتأكيد نشر الإعلان لدى المدير.');
+      setErrorMessage('يرجى إرفاق صورة وصل التحويل أو إدخال رقم الإشعار لتأكيد نشر الإعلان.');
       return;
     }
 
-    const store = activeSelectedStore;
-    const storeName = businessName.trim() || store?.name || 'متجر موثق في دليل العراق';
-    const govId = store ? store.governorateId : 'all';
-    const govName = store ? store.governorateName : 'عموم العراق';
-    const distId = store ? store.districtId : 'all';
-    const distName = store ? store.districtName : 'كافة المحافظات';
-    const catId = store ? store.category : 'general';
-    const catName = store ? (store as any).categoryName || store.category || 'متاجر منوعة' : 'متاجر منوعة';
+    const govId = initialGovernorateId || 'all';
+    const govName = initialGovernorateName || 'عموم العراق';
+    const distId = initialDistrictId || 'all';
+    const distName = initialDistrictName || 'كافة الأقضية';
 
     const selectedScope = selectedTier.scope;
+    const finalCategoryId = selectedScope === 'national' ? 'all' : targetCategoryId;
+    const finalCategoryName = selectedScope === 'national' ? 'عموم العراق' : currentCategoryObj.title;
 
-    // Submit to Manager with pending_approval status
+    // Use description or derived headline
+    const headline = adDescription.split(/[.\n-،]/)[0]?.trim().slice(0, 50) || 'إعلان معتمد في دليل العراق';
+
     submitAdForApproval({
       scope: selectedScope,
       governorateId: selectedScope === 'national' ? 'all' : govId,
       governorateName: selectedScope === 'national' ? 'عموم العراق' : govName,
       districtId: selectedScope === 'national' ? 'all' : distId,
       districtName: selectedScope === 'national' ? 'كافة المحافظات' : distName,
-      categoryId: catId,
-      categoryName: catName,
-      businessName: storeName,
-      headline: storeName,
+      categoryId: finalCategoryId,
+      categoryName: finalCategoryName,
+      businessName: headline,
+      headline,
       description: adDescription.trim(),
-      imageUrl: images[0] || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=800&q=80',
+      imageUrl: images[0] || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=85',
       images: images.length > 0 ? images : undefined,
       phone: adPhone.trim(),
-      whatsapp: adWhatsapp.trim() || adPhone.trim(),
-      offerBadge: offerBadge.trim() || 'إعلان ممول 👑',
+      whatsapp: adPhone.trim(),
+      offerBadge: 'موثق 👑',
       durationDays: selectedTier.days,
       price: selectedTier.price,
       paymentMethod: paymentMethod === 'zaincash' ? 'زين كاش (07801459424)' : 'ماستر كارد (4538548308)',
       receiptImage: receiptImage || undefined,
       aiStyle: {
-        fontSize,
-        textColor,
-        bgColor,
-        animation: animationType,
-        lightingTheme,
+        lightingTheme: activeAiStyle.id,
       },
     });
 
     confetti({
-      particleCount: 85,
-      spread: 70,
+      particleCount: 90,
+      spread: 75,
       origin: { y: 0.6 },
     });
 
@@ -387,47 +446,21 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Background gradient map for AI Preview
-  const bgStyles: Record<string, string> = {
-    'gradient-navy': 'bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-sky-500/40',
-    'gradient-gold': 'bg-gradient-to-r from-amber-950 via-slate-900 to-yellow-950 border-amber-500/40',
-    'gradient-emerald': 'bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 border-emerald-500/40',
-    'gradient-red': 'bg-gradient-to-r from-rose-950 via-slate-900 to-red-950 border-rose-500/40',
-    'gradient-purple': 'bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 border-purple-500/40',
-    'solid-black': 'bg-slate-950 border-slate-700',
-  };
-
-  // Font size map
-  const fontSizeClasses: Record<string, { title: string; body: string }> = {
-    small: { title: 'text-sm font-bold', body: 'text-xs leading-relaxed' },
-    medium: { title: 'text-base font-black', body: 'text-xs sm:text-sm leading-relaxed' },
-    large: { title: 'text-lg sm:text-xl font-black', body: 'text-sm sm:text-base leading-relaxed' },
-    huge: { title: 'text-xl sm:text-2xl font-black', body: 'text-base sm:text-lg leading-relaxed' },
-  };
-
-  // Animation map
-  const animationClasses: Record<string, string> = {
-    pulse: 'animate-pulse',
-    slide: 'transition-transform duration-500 hover:scale-[1.01]',
-    glow: 'shadow-lg shadow-sky-500/20',
-    subtle: '',
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden text-white flex flex-col max-h-[94vh]">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between bg-gradient-to-r from-blue-700 via-sky-600 to-blue-800 px-5 py-3.5 border-b border-white/20">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-400 text-slate-950 font-black shadow-md">
-              <Crown className="h-5 w-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-2 sm:p-4 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative flex flex-col w-full max-w-3xl max-h-[94vh] rounded-3xl border border-amber-500/40 bg-slate-900 shadow-2xl overflow-hidden">
+        {/* HEADER */}
+        <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-4 sm:px-6 py-2.5 text-right" dir="rtl">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 border border-amber-400/40">
+              <Crown className="h-4 w-4 animate-pulse" />
             </div>
             <div>
-              <h3 className="font-display text-sm sm:text-base font-black text-white">
-                منصة إنشاء ونشر إعلانات المتاجر الموثقة 🇮🇶
-              </h3>
-              <p className="text-[11px] text-sky-100 font-medium">
-                تصميم ذكي بالذكاء الاصطناعي • تحويل مباشر عبر زين كاش وماستر كارد
+              <h2 className="font-display text-sm font-black text-white">
+                لوحة إعلانات المتاجر والمشاريع 👑
+              </h2>
+              <p className="text-[10px] text-amber-300 font-medium">
+                {selectedTier.badge} • مستطيل الإعلان الحقيقي بنسبة 1:1 مع الموقع
               </p>
             </div>
           </div>
@@ -435,746 +468,532 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 text-right" dir="rtl">
-          {/* STEP 1: FORM & AI DESIGN */}
-          {step === 'form' && (
-            <form onSubmit={handleGoToPayment} className="space-y-5">
-              {/* Step Notice */}
-              <div className="rounded-2xl bg-sky-950/40 border border-sky-500/30 p-3.5 flex items-start gap-2.5">
-                <Sparkles className="h-5 w-5 text-sky-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-sky-200 leading-relaxed">
-                  أنشئ إعلانك، أضف حتى 5 صور لمتجرك، وخصص التصميم وحجم الخط بالذكاء الاصطناعي، ثم اختبر الإعلان قبل النشر والتحويل.
-                </div>
-              </div>
-
-              {/* Pricing Package Selector */}
-              <div>
-                <label className="block text-xs font-black text-slate-200 mb-2">
-                  اختر باقة ونطاق ظهور الإعلان:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {DURATION_TIERS.map((tier) => {
-                    const isSelected = selectedTierId === tier.id;
-                    return (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        onClick={() => setSelectedTierId(tier.id)}
-                        className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-between ${
-                          isSelected
-                            ? 'bg-blue-600/30 border-sky-400 text-white shadow-md shadow-sky-900/30 scale-[1.02]'
-                            : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white'
-                        }`}
-                      >
-                        <span className="text-[10px] font-bold text-amber-300 mb-1">
-                          {tier.badge}
-                        </span>
-                        <span className="text-xs font-bold mb-1">{tier.label}</span>
-                        <span className="font-black text-sm text-amber-400 bg-slate-950/60 px-2.5 py-0.5 rounded-lg border border-slate-800">
-                          {tier.priceText}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Store Selection or Name Field */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-200">
-                  اسم المتجر أو النشاط التجاري:
-                </label>
-                {verifiedUserStores.length > 0 ? (
-                  <div className="space-y-2">
-                    <select
-                      value={selectedStoreId}
-                      onChange={(e) => handleStoreSelect(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs font-bold text-white focus:border-sky-400 focus:outline-none"
-                    >
-                      {verifiedUserStores.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.districtName || s.governorateName})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="اسم المتجر كما سيظهر في الإعلان"
-                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs text-white focus:border-sky-400 focus:outline-none"
-                    />
+        {/* SCROLLABLE BODY */}
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-4 text-right" dir="rtl">
+          {/* ========================================================================= */}
+          {/* 1. CREATION SCREEN: ONLY REQUESTED FIELDS + AI BUTTON + 1:1 RECTANGLE */}
+          {/* ========================================================================= */}
+          {step === 'create' && (
+            <div className="space-y-3.5">
+              {/* Scope Bar */}
+              <div className="rounded-xl bg-slate-950 p-2.5 sm:p-3 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                  <span className="font-bold text-slate-300">نطاق الإعلان:</span>
+                  <div className="flex items-center gap-1.5">
+                    {DURATION_TIERS.map((tier) => {
+                      const isSel = selectedTierId === tier.id;
+                      return (
+                        <button
+                          key={tier.id}
+                          type="button"
+                          onClick={() => setSelectedTierId(tier.id)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            isSel
+                              ? 'bg-blue-600 text-white shadow-md font-black'
+                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                          }`}
+                        >
+                          {tier.badge} ({tier.priceText})
+                        </button>
+                      );
+                    })}
                   </div>
-                ) : (
-                  <input
-                    type="text"
-                    required
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    placeholder="مثال: أسواق بغداد الكبرى / مطعم البركة"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs text-white focus:border-sky-400 focus:outline-none"
-                  />
+                </div>
+
+                {/* Categories ONLY for store_area (Inside Stores) */}
+                {selectedTier.scope === 'store_area' && (
+                  <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-amber-300">
+                        صدارة قسم: {currentCategoryObj.title} {currentCategoryObj.icon}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        اختر القسم المناسب لإعلانك
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {CIRCULAR_CATEGORIES.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setTargetCategoryId(cat.id)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            targetCategoryId === cat.id
+                              ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                          }`}
+                        >
+                          <span>{cat.icon}</span>
+                          <span>{cat.shortTitle || cat.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {/* Ad Description / Details Field (Large) */}
+              {/* 1. PHOTOS (1 to 5 Images, Horizontal Rectangular Preview) */}
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-200">
-                    تفاصيل الإعلان والعروض الترويجية:
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAiEnhanceCopy}
-                    disabled={isAiGeneratingCopy}
-                    className="flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30"
-                  >
-                    <Wand2 className="h-3 w-3" />
-                    <span>{isAiGeneratingCopy ? 'جاري التحسين بالذكاء...' : 'تحسين بالذكاء الاصطناعي'}</span>
-                  </button>
-                </div>
-                <textarea
-                  rows={4}
-                  required
-                  value={adDescription}
-                  onChange={(e) => setAdDescription(e.target.value)}
-                  placeholder="اكتب هنا تفاصيل العرض، الخصومات، الأصناف المشمولة، وأوقات العمل بدقة لجذب الزبائن..."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 p-3.5 text-xs text-white placeholder-slate-400 focus:border-sky-400 focus:outline-none leading-relaxed"
-                />
-              </div>
-
-              {/* Photo Upload: Up to 5 Images */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                    <span>صور المتجر والإعلان:</span>
-                    <span className="text-amber-400 font-mono text-[11px]">
-                      ({images.length}/5 صور)
-                    </span>
-                  </label>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-200">
+                    صور المتجر (من صورة إلى 5 صور):{' '}
+                    <span className="text-amber-400 font-mono">({images.length}/5)</span>
+                  </span>
                   <span className="text-[10px] text-slate-400">
-                    يمكنك إضافة حتى 5 صور من متجرك
+                    تتناوب في اللوحة كل 3 ثوانٍ
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                   {images.map((img, idx) => (
                     <div
                       key={idx}
-                      className="relative group rounded-xl overflow-hidden border border-slate-700 aspect-square bg-slate-800"
+                      className="relative group rounded-xl overflow-hidden border border-slate-700 aspect-[2.6/1] bg-slate-800 shadow-sm"
                     >
                       <img
                         src={img}
                         alt={`صورة ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveImage(idx)}
-                          className="p-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 cursor-pointer transition-colors"
-                          title="حذف الصورة"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {idx === 0 && (
-                        <span className="absolute bottom-1 right-1 bg-amber-500 text-slate-950 font-bold text-[9px] px-1.5 py-0.5 rounded-md">
-                          الرئيسية
-                        </span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        className="absolute inset-0 bg-red-950/80 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 cursor-pointer text-[10px] font-bold"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                        <span>حذف</span>
+                      </button>
                     </div>
                   ))}
 
                   {images.length < 5 && (
-                    <label className="rounded-xl border-2 border-dashed border-slate-700 hover:border-amber-400/60 bg-slate-800/40 hover:bg-slate-800/80 transition-all flex flex-col items-center justify-center p-3 text-center cursor-pointer aspect-square">
+                    <label className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-600 hover:border-amber-400 bg-slate-800/40 hover:bg-slate-800/80 aspect-[2.6/1] cursor-pointer transition-all">
                       <input
                         type="file"
                         accept="image/*"
                         multiple
                         onChange={handleImageUpload}
                         className="hidden"
+                        disabled={imageUploadLoading}
                       />
-                      <Plus className="h-6 w-6 text-amber-400 mb-1" />
+                      <Plus className="h-4 w-4 text-amber-400" />
                       <span className="text-[10px] font-bold text-slate-300">
-                        {imageUploadLoading ? 'جاري التحميل...' : 'إضافة صورة'}
+                        {imageUploadLoading ? 'رفع...' : '+ أضف صورة'}
                       </span>
                     </label>
                   )}
                 </div>
               </div>
 
-              {/* AI Design Studio: Font Size, Colors, Background, and Animation */}
-              <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-4 space-y-3.5">
-                <div className="flex items-center gap-2 pb-2 border-b border-slate-800 text-xs font-bold text-amber-400">
-                  <Palette className="h-4 w-4" />
-                  <span>تخصيص التصميم بالذكاء الاصطناعي (AI Style Studio):</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {/* Font Size */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                      <Type className="h-3.5 w-3.5 text-sky-400" />
-                      <span>حجم الخط:</span>
-                    </label>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {[
-                        { id: 'small', label: 'صغير' },
-                        { id: 'medium', label: 'متوسط' },
-                        { id: 'large', label: 'عريض' },
-                        { id: 'huge', label: 'ضخم' },
-                      ].map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setFontSize(s.id as any)}
-                          className={`py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
-                            fontSize === s.id
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs'
-                              : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Font Color */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1.5">
-                      لون الخط:
-                    </label>
-                    <div className="flex items-center gap-2">
-                      {[
-                        { color: '#FFFFFF', name: 'أبيض' },
-                        { color: '#FBBF24', name: 'ذهبي' },
-                        { color: '#38BDF8', name: 'سماوي' },
-                        { color: '#34D399', name: 'زمردي' },
-                        { color: '#F87171', name: 'أحمر' },
-                      ].map((c) => (
-                        <button
-                          key={c.color}
-                          type="button"
-                          onClick={() => setTextColor(c.color)}
-                          className={`flex-1 py-1 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
-                            textColor === c.color ? 'ring-2 ring-white scale-105' : 'opacity-80 hover:opacity-100'
-                          }`}
-                          style={{ backgroundColor: c.color, color: c.color === '#FFFFFF' || c.color === '#FBBF24' ? '#000' : '#FFF' }}
-                        >
-                          {c.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Background Theme */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1.5">
-                      لون وتدرج الخلفية:
-                    </label>
-                    <select
-                      value={bgColor}
-                      onChange={(e) => setBgColor(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-white focus:outline-none"
-                    >
-                      <option value="gradient-navy">كحلي ملكي عراقي (Royal Navy)</option>
-                      <option value="gradient-gold">فخامة ذهبية وسوداء (Gold Luxury)</option>
-                      <option value="gradient-emerald">أخضر زمردي فاخر (Emerald)</option>
-                      <option value="gradient-red">أحمر عراقي جذاب (Burgundy)</option>
-                      <option value="gradient-purple">بنفسجي ملكي مميز (Purple)</option>
-                      <option value="solid-black">أسود فاحم كلاسيكي (Deep Black)</option>
-                    </select>
-                  </div>
-
-                  {/* Animation Style */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1.5 flex items-center gap-1">
-                      <Activity className="h-3.5 w-3.5 text-sky-400" />
-                      <span>حركة وتأثير الإعلان:</span>
-                    </label>
-                    <select
-                      value={animationType}
-                      onChange={(e) => setAnimationType(e.target.value as any)}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-white focus:outline-none"
-                    >
-                      <option value="glow">وميض ولمعان ترويجي (Neon Glow)</option>
-                      <option value="pulse">نبض وتكبير لافت (Pulse)</option>
-                      <option value="slide">انزلاق سلس تفاعلي (Smooth Slide)</option>
-                      <option value="subtle">هدوء وثبات ملكي (Subtle Elegance)</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Lighting & Atmospheric Theme Selector */}
-                <div className="pt-2 border-t border-slate-800">
-                  <label className="block text-[11px] font-bold text-amber-300 mb-2 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-                      <span>إضاءة وهالة لوحة الإعلان (Lighting Ambient FX):</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400">إضاءة محيطية ساحرة للفت انتباه الزبائن</span>
-                  </label>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                    {[
-                      { id: 'gold', name: 'نيون ذهبي فخم', icon: '👑', desc: 'لمعان ذهبي ملكي' },
-                      { id: 'neon-blue', name: 'ليزر أزرق سيبراني', icon: '⚡', desc: 'إضاءة تقنية مبهرة' },
-                      { id: 'emerald', name: 'زمردي أخضر مشرق', icon: '💎', desc: 'بريق أحجار كريمة' },
-                      { id: 'sunset', name: 'غروب دافئ وجذاب', icon: '🌅', desc: 'تدرج دافئ مغناطيسي' },
-                      { id: 'purple', name: 'بنفسجي إمبراطوري', icon: '🔮', desc: 'فخامة وأناقة قصوى' },
-                    ].map((th) => (
-                      <button
-                        key={th.id}
-                        type="button"
-                        onClick={() => setLightingTheme(th.id as any)}
-                        className={`p-2 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-0.5 ${
-                          lightingTheme === th.id
-                            ? 'bg-amber-500/20 border-amber-400 text-white shadow-md shadow-amber-500/20 scale-[1.03] ring-1 ring-amber-400'
-                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
-                        }`}
-                      >
-                        <span className="text-base">{th.icon}</span>
-                        <span className="text-[11px] font-bold">{th.name}</span>
-                        <span className="text-[9px] text-slate-400 opacity-80">{th.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Phone & WhatsApp fields */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-200 mb-1">
-                    رقم هاتف الاتصال المباشر:
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    value={adPhone}
-                    onChange={(e) => setAdPhone(e.target.value)}
-                    placeholder="مثال: 07801234567"
-                    dir="ltr"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs text-white focus:border-sky-400 focus:outline-none text-right"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-200 mb-1">
-                    رقم الواتساب (اختياري):
-                  </label>
-                  <input
-                    type="tel"
-                    value={adWhatsapp}
-                    onChange={(e) => setAdWhatsapp(e.target.value)}
-                    placeholder="مثال: 07801234567"
-                    dir="ltr"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs text-white focus:border-sky-400 focus:outline-none text-right"
-                  />
-                </div>
-              </div>
-
-              {/* LIVE TEST AD PREVIEW BUTTON & LUXURIOUS BILLBOARD */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-amber-400/20 text-amber-300 font-black border border-amber-400/30">
-                      <Sparkles className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <h4 className="text-xs sm:text-sm font-black text-amber-300">
-                        معاينة لوحة الإعلان الترويجي الحصري 👑
-                      </h4>
-                      <p className="text-[10px] text-slate-400">
-                        الصورة بكامل حجم اللوحة والمعلومات مضيئة وظاهرة فوق صورة المتجر
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Billboard Format Switcher: Billboard Landscape vs Story Vertical */}
-                  <div className="flex items-center gap-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewVariant('billboard')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                        previewVariant === 'billboard'
-                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      لوحة عريضة (16:9)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewVariant('story')}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                        previewVariant === 'story'
-                          ? 'bg-amber-500 text-slate-950 font-black shadow-xs'
-                          : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      إعلان عمودي (Story)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsPreviewActive(!isPreviewActive)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer"
-                      title={isPreviewActive ? 'تصغير' : 'تكبير'}
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {isPreviewActive && (
-                  <div className="rounded-3xl border border-amber-500/40 p-2 sm:p-3 bg-slate-950/80 shadow-2xl space-y-2 animate-fade-in">
-                    {/* The Full Majestic Cinematic Ad Billboard */}
-                    <CinematicAdBillboard
-                      businessName={businessName.trim() || activeSelectedStore?.name || 'اسم متجرك التجاري'}
-                      headline={businessName.trim() || activeSelectedStore?.name}
-                      description={
-                        adDescription.trim() ||
-                        'تفاصيل العرض التجاري، الخصومات الحصرية، والخدمات المميزة التي تجذب آلاف الزبائن إلى متجرك مباشرة.'
-                      }
-                      images={images}
-                      phone={adPhone.trim() || '07801234567'}
-                      whatsapp={adWhatsapp.trim() || adPhone.trim()}
-                      offerBadge={offerBadge.trim() || 'عرض حصري 👑'}
-                      governorateName={activeSelectedStore?.governorateName || 'عموم العراق'}
-                      districtName={activeSelectedStore?.districtName}
-                      categoryName={activeSelectedStore?.category || 'متاجر منوعة'}
-                      aiStyle={{
-                        fontSize,
-                        textColor,
-                        bgColor,
-                        animation: animationType,
-                      }}
-                      lightingTheme={lightingTheme}
-                      variant={previewVariant}
-                      isLivePreview={true}
-                    />
-
-                    {/* Notice below billboard to encourage advertiser */}
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 px-2 pt-1">
-                      <span className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>لوحة الإعلان جاهزة ومطابقة للمواصفات الاحترافية العالمية</span>
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        {images.length > 0 ? `${images.length} صور مضافة • تقليب تلقائي` : 'صورة نموذجية (أضف صورك بالأعلى)'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Error Message */}
-              {errorMessage && (
-                <div className="rounded-xl bg-rose-950/80 border border-rose-800 p-3 text-xs text-rose-200 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              {/* Proceed to Payment Action */}
-              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer"
-                >
-                  إلغاء
-                </button>
-
-                <button
-                  type="submit"
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black px-6 py-2.5 text-xs shadow-lg transition-all cursor-pointer active:scale-95"
-                >
-                  <span>متابعة ونشر الإعلان</span>
-                  <ArrowRight className="h-4 w-4 rotate-180" />
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* STEP 2: PAYMENT & RECEIPT ATTACHMENT */}
-          {step === 'payment' && (
-            <div className="space-y-5">
-              {/* Payment Header & Total */}
-              <div className="rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-amber-500/10 border border-amber-500/30 p-4 flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-slate-400">قيمة رسوم الإعلان المعتمدة:</div>
-                  <div className="font-display text-lg sm:text-xl font-black text-amber-400">
-                    {selectedTier.priceText}
-                  </div>
-                </div>
-                <div className="text-left">
-                  <span className="rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 text-xs font-bold">
-                    {selectedTier.label}
-                  </span>
-                </div>
-              </div>
-
-              {/* Ad Billboard Review in Payment Step */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs font-bold text-amber-300">
-                  <span className="flex items-center gap-1.5">
-                    <Crown className="h-4 w-4 text-amber-400" />
-                    <span>لوحة إعلانك المعتمدة للنشر:</span>
-                  </span>
-                  <span className="text-[10px] text-emerald-400 font-medium">تصميم احترافي جاهز للنشر ✓</span>
-                </div>
-                <CinematicAdBillboard
-                  businessName={businessName.trim() || activeSelectedStore?.name || 'اسم متجرك'}
-                  headline={businessName.trim() || activeSelectedStore?.name}
-                  description={adDescription.trim()}
-                  images={images}
-                  phone={adPhone.trim() || '07801234567'}
-                  whatsapp={adWhatsapp.trim() || adPhone.trim()}
-                  offerBadge={offerBadge.trim() || 'عرض حصري 👑'}
-                  governorateName={activeSelectedStore?.governorateName || 'عموم العراق'}
-                  districtName={activeSelectedStore?.districtName}
-                  categoryName={activeSelectedStore?.category || 'متاجر منوعة'}
-                  aiStyle={{
-                    fontSize,
-                    textColor,
-                    bgColor,
-                    animation: animationType,
-                  }}
-                  lightingTheme={lightingTheme}
-                  variant="compact"
-                  isLivePreview={true}
-                />
-              </div>
-
-              {/* Payment Methods Selector (ZainCash or MasterCard) */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-300">
-                  اختر طريقة التحويل المالي الفعلي:
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('zaincash')}
-                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
-                      paymentMethod === 'zaincash'
-                        ? 'border-amber-500 bg-amber-500/10 text-white shadow-md'
-                        : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <Smartphone className="h-6 w-6 text-amber-400" />
-                    <span className="text-xs font-bold">محفظة زين كاش</span>
-                    <span className="text-[10px] text-slate-400">ZainCash تحويل فوري</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('mastercard')}
-                    className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1.5 ${
-                      paymentMethod === 'mastercard'
-                        ? 'border-indigo-500 bg-indigo-500/10 text-white shadow-md'
-                        : 'border-slate-800 bg-slate-800/40 text-slate-400 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <CreditCard className="h-6 w-6 text-indigo-400" />
-                    <span className="text-xs font-bold">ماستر كارد (MasterCard)</span>
-                    <span className="text-[10px] text-slate-400">تحويل مصرفي معتمد</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Account Details Box */}
-              <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
-                  <span className="font-bold text-white">
-                    {paymentMethod === 'zaincash' ? 'رقم محفظة زين كاش الرسمية:' : 'رقم حساب وبطاقة الماستر كارد:'}
-                  </span>
-                  <span className="text-emerald-400 font-mono text-[11px]">حساب مفعل وموثق ✓</span>
-                </div>
-
-                <div className="flex items-center justify-between bg-slate-900 border border-slate-700 rounded-xl px-4 py-3">
-                  <span className="font-mono text-lg sm:text-xl font-black text-amber-400 tracking-wider" dir="ltr">
-                    {paymentMethod === 'zaincash' ? paymentAccounts.zaincash : paymentAccounts.mastercard}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopy(
-                        paymentMethod === 'zaincash' ? paymentAccounts.zaincash : paymentAccounts.mastercard
-                      )
-                    }
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
-                  >
-                    {copiedAccount ===
-                    (paymentMethod === 'zaincash' ? paymentAccounts.zaincash : paymentAccounts.mastercard) ? (
-                      <>
-                        <Check className="h-3.5 w-3.5" />
-                        <span>تم النسخ</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        <span>نسخ الرقم</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="text-[11px] text-slate-400 leading-relaxed bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
-                  {paymentMethod === 'zaincash'
-                    ? 'قم بالدخول إلى تطبيق زين كاش واختيار تحويل أموال للرقم الموضح أعلاه بمبلغ الباقة، ثم التقط لقطة شاشة للإشعار وأرفقها بالأسفل.'
-                    : 'قم بالتحويل عبر تطبيق المصرف إلى رقم حساب الماستر كارد الموضح أعلاه بمبلغ الباقة، ثم التقط صورة للوصل أو الإشعار وأرفقه أدناه.'}
-                </div>
-              </div>
-
-              {/* Receipt Image Upload Field */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-200 flex items-center justify-between">
-                  <span>إرفاق صورة الوصل أو إشعار التحويل:</span>
-                  <span className="text-amber-400 text-[11px] font-normal">مطلوب لمراجعة المدير</span>
-                </label>
-
-                {receiptImage ? (
-                  <div className="relative rounded-2xl overflow-hidden border border-emerald-500/50 bg-slate-950 p-2 flex items-center gap-3">
-                    <img
-                      src={receiptImage}
-                      alt="وصل التحويل"
-                      className="h-20 w-20 object-cover rounded-xl border border-slate-700"
-                    />
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>تم إرفاق صورة الوصل بنجاح</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">
-                        سيقوم المدير بمراجعة هذا الوصل وتفعيل الإعلان فوراً.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setReceiptImage('')}
-                      className="p-2 rounded-xl bg-rose-950 text-rose-300 hover:bg-rose-900 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="rounded-2xl border-2 border-dashed border-slate-700 hover:border-amber-400/60 bg-slate-800/40 hover:bg-slate-800/80 p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleReceiptUpload}
-                      className="hidden"
-                    />
-                    <Upload className="h-7 w-7 text-amber-400 mb-1.5" />
-                    <span className="text-xs font-bold text-white mb-0.5">
-                      انقر هنا لإرفاق لقطة شاشة لوصل التحويل
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      يدعم صور الهاتف وملفات JPG و PNG
-                    </span>
-                  </label>
-                )}
-              </div>
-
-              {/* Transaction Ref Number (Optional fallback) */}
+              {/* 2. DESCRIPTION BOX (Free text - write whatever you want!) */}
               <div className="space-y-1">
-                <label className="block text-xs font-bold text-slate-300">
-                  رقم عملية التحويل / كود الإشعار (اختياري):
+                <label className="block text-xs font-bold text-slate-200">
+                  مربع الوصف (اكتب ما تريده بحرية):
                 </label>
-                <input
-                  type="text"
-                  value={transactionRef}
-                  onChange={(e) => setTransactionRef(e.target.value)}
-                  placeholder="مثال: رقم العملية من زين كاش أو الماستر"
-                  dir="ltr"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3.5 py-2.5 text-xs text-white focus:border-sky-400 focus:outline-none text-right"
+                <textarea
+                  rows={2}
+                  required
+                  value={adDescription}
+                  onChange={(e) => setAdDescription(e.target.value)}
+                  placeholder="اكتب هنا تفاصيل إعلانك، اسم مطعمك أو مشروعك، خدماتك، أو أي تفاصيل تفضلها بحرية تامة..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-xs text-white placeholder-slate-400 focus:border-amber-400 focus:outline-none leading-relaxed"
                 />
+              </div>
+
+              {/* 3. PHONE NUMBER (Single phone field with verification status indicator) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="font-bold text-slate-200 flex items-center gap-1">
+                    <Phone className="h-3 w-3 text-emerald-400" />
+                    <span>رقم الهاتف الموثق للتواصل:</span>
+                  </label>
+                  {isCurrentPhoneVerified ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      <ShieldCheck className="h-3 w-3" />
+                      <span>رقم موثق رسمياً ✓</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-950/50 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      <Lock className="h-2.5 w-2.5" />
+                      <span>سيتطلب رمز واتساب قبل الدفع</span>
+                    </span>
+                  )}
+                </div>
+
+                <input
+                  type="tel"
+                  required
+                  value={adPhone}
+                  onChange={(e) => setAdPhone(e.target.value)}
+                  placeholder="0780xxxxxxx"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* 4. THE AI DESIGN & MOTION GENERATOR BUTTON */}
+              <button
+                type="button"
+                onClick={handleGenerateAiBillboard}
+                disabled={isAiGeneratingStyle}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-sky-500/20 to-purple-500/20 hover:from-amber-500/30 hover:to-purple-500/30 border border-amber-400/50 text-white font-bold text-xs shadow-md transition-all cursor-pointer active:scale-98"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-amber-400 ${isAiGeneratingStyle ? 'animate-spin' : ''}`} />
+                <span>
+                  توليد حركة وتصميم بالذكاء الاصطناعي ✨ ({activeAiStyle.motionName} - {activeAiStyle.name})
+                </span>
+              </button>
+
+              {/* 5. EXACT 1:1 REAL BILLBOARD RECTANGLE PREVIEW */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="font-bold text-slate-300">
+                    معاينة مستطيل الإعلان الحقيقي (مطابق 1:1 لما سيظهر في الموقع):
+                  </span>
+                  <span className="text-amber-300 font-medium">كتابة شفافة متحركة • صور تملأ المستطيل بالكامل</span>
+                </div>
+
+                <div className="w-full">
+                  <CinematicAdBillboard
+                    description={adDescription}
+                    images={images}
+                    phone={adPhone}
+                    scope={selectedTier.scope}
+                    governorateName={initialGovernorateName || 'المحافظة'}
+                    districtName={initialDistrictName || 'كافة الأقضية'}
+                    categoryName={selectedTier.scope === 'national' ? 'عموم العراق' : currentCategoryObj.title}
+                    aiStyleId={activeAiStyle.id}
+                    isLivePreview={true}
+                  />
+                </div>
               </div>
 
               {/* Error Message */}
               {errorMessage && (
-                <div className="rounded-xl bg-rose-950/80 border border-rose-800 p-3 text-xs text-rose-200 flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-200 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="pt-2 flex items-center justify-between border-t border-slate-800">
+              {/* Next Step Button */}
+              <div className="pt-1">
                 <button
                   type="button"
-                  onClick={() => setStep('form')}
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 text-xs font-bold transition-colors cursor-pointer"
+                  onClick={handleProceedFromCreate}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-2.5 px-6 text-sm shadow-xl shadow-emerald-950/50 transition-all cursor-pointer active:scale-98"
                 >
-                  الرجوع لتعديل الإعلان
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleConfirmAndPublish}
-                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-6 py-2.5 text-xs shadow-lg transition-all cursor-pointer active:scale-95"
-                >
-                  <Send className="h-4 w-4" />
-                  <span>إرسال الإعلان للمدير للمراجعة والنشر</span>
+                  <span>
+                    {isCurrentPhoneVerified
+                      ? 'تأكيد اللوحة والمتابعة للدفع ونشر الإعلان 🚀'
+                      : 'توثيق رقم الهاتف عبر الواتساب والمتابعة 💬'}
+                  </span>
+                  <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* STEP 3: SUCCESS CONFIRMATION */}
-          {step === 'success' && (
-            <div className="text-center py-6 px-3 space-y-4">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                <CheckCircle2 className="h-8 w-8" />
+          {/* ========================================================================= */}
+          {/* 2. MANDATORY WHATSAPP OTP VERIFICATION STEP */}
+          {/* ========================================================================= */}
+          {step === 'otp_verify' && (
+            <div className="space-y-4 py-2 animate-in fade-in duration-200 max-w-lg mx-auto">
+              <div className="text-center space-y-2">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/40 shadow-lg shadow-emerald-950/50">
+                  <MessageCircle className="h-7 w-7 animate-pulse" />
+                </div>
+                <h3 className="text-base font-black text-white">
+                  توثيق رقم الهاتف عبر الواتساب 💬
+                </h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  لضمان موثوقية وأمان الإعلانات، يقتصر نشر الإعلانات على أصحاب الأرقام الحقيقية الموثقة برمز التحقق.
+                </p>
+                <div className="inline-block bg-slate-800 border border-slate-700 rounded-xl px-3 py-1 font-mono text-sm text-emerald-400 font-bold">
+                  {adPhone}
+                </div>
               </div>
 
+              {/* Secure WhatsApp Privacy & Instructions Box */}
+              <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-2.5 shadow-lg">
+                <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-xs">
+                  <MessageCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>تم إرسال كود التحقق في رسالة خاصة إلى الواتساب</span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed max-w-md mx-auto">
+                  لأسباب أمنية وحماية خصوصية صاحب المتجر، يصل كود التحقق حصراً في رسالة خاصة إلى تطبيق <strong>WhatsApp</strong> على رقم هاتفك.
+                </p>
+                <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-amber-300 font-medium">
+                  📱 يرجى فتح تطبيق الواتساب الآن، نسخ كود التحقق (6 أرقام)، ولصقه في المربع أدناه.
+                </div>
+                {whatsappDirectUrl && (
+                  <div className="pt-1">
+                    <a
+                      href={whatsappDirectUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      <span>فتح تطبيق الواتساب لاستلام الكود 💬</span>
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* OTP Form */}
+              <form onSubmit={handleVerifyOtp} className="space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-200">
+                      أدخل رمز التحقق المكون من 6 أرقام:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          const clean = text.replace(/\D/g, '').slice(0, 6);
+                          if (clean) {
+                            setOtpInput(clean);
+                            setOtpError('');
+                          }
+                        } catch {
+                          setOtpError('يرجى لصق الرمز يدوياً داخل الحقل.');
+                        }
+                      }}
+                      className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span>📋 لصق الرمز من الحافظة</span>
+                    </button>
+                  </div>
+
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={otpInput}
+                    onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="------"
+                    autoFocus
+                    className="w-full text-center tracking-widest text-2xl font-mono font-black rounded-2xl border-2 border-emerald-500/50 bg-slate-950 px-4 py-3 text-white focus:border-emerald-400 focus:outline-none shadow-inner"
+                  />
+                </div>
+
+                {otpError && (
+                  <div className="p-2.5 rounded-xl bg-red-950/70 border border-red-500/40 text-xs text-red-200 flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+                    <span>{otpError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={otpInput.trim().length !== 6 || isSendingOtp}
+                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-black py-3 px-6 text-sm shadow-xl shadow-emerald-950/60 transition-all cursor-pointer active:scale-98"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span>{isSendingOtp ? 'جاري التحقق من الخادم...' : 'تأكيد الرمز وتوثيق الرقم والمتابعة 🚀'}</span>
+                </button>
+              </form>
+
+              {/* Resend and Back buttons */}
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStep('create')}
+                  className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  ← تعديل رقم الهاتف
+                </button>
+
+                <button
+                  type="button"
+                  disabled={resendTimer > 0 || isSendingOtp}
+                  onClick={() => triggerSendOtp(adPhone.trim())}
+                  className="text-emerald-400 hover:text-emerald-300 disabled:text-slate-500 transition-colors cursor-pointer font-bold"
+                >
+                  {resendTimer > 0
+                    ? `إعادة الإرسال خلال (${resendTimer} ثانية)`
+                    : 'إعادة إرسال الرمز عبر الواتساب'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* 3. PAYMENT STEP */}
+          {/* ========================================================================= */}
+          {step === 'payment' && (
+            <div className="space-y-3.5 animate-in fade-in duration-200">
               <div className="space-y-1">
-                <h4 className="font-display text-lg font-black text-white">
-                  تم إرسال إعلانك بنجاح إلى إدارة دليل العراق!
-                </h4>
-                <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
-                  تم تحويل الإعلان مع صورة وصل التحويل إلى لوحة المدير العام للمراجعة. سيتم نشر إعلانك في لوحة الإعلانات فور تدقيق الوصل.
+                <div className="flex items-center justify-between text-xs text-amber-300 font-bold">
+                  <span>لوحة الإعلان المعتمدة للنشر:</span>
+                  <span>{selectedTier.label} - {selectedTier.priceText}</span>
+                </div>
+                <CinematicAdBillboard
+                  description={adDescription}
+                  images={images}
+                  phone={adPhone}
+                  scope={selectedTier.scope}
+                  governorateName={initialGovernorateName || 'المحافظة'}
+                  districtName={initialDistrictName || 'كافة الأقضية'}
+                  categoryName={selectedTier.scope === 'national' ? 'عموم العراق' : currentCategoryObj.title}
+                  aiStyleId={activeAiStyle.id}
+                  isLivePreview={true}
+                />
+              </div>
+
+              {/* Payment selector */}
+              <div className="space-y-2">
+                <span className="block text-xs font-bold text-slate-200">
+                  وسيلة تحويل مبلغ الإعلان ({selectedTier.priceText}):
+                </span>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('zaincash')}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                      paymentMethod === 'zaincash'
+                        ? 'bg-amber-500/20 border-amber-400 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-base">📱</span>
+                    <span className="text-xs font-bold">زين كاش (Zain Cash)</span>
+                    <span className="text-[11px] text-amber-300 font-mono font-bold">07801459424</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('mastercard')}
+                    className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                      paymentMethod === 'mastercard'
+                        ? 'bg-amber-500/20 border-amber-400 text-white'
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <CreditCard className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs font-bold">ماستر كارد (MasterCard)</span>
+                    <span className="text-[11px] text-amber-300 font-mono font-bold">4538548308</span>
+                  </button>
+                </div>
+
+                <div className="rounded-xl bg-slate-950 border border-slate-800 p-2.5 flex items-center justify-between">
+                  <span className="text-xs text-slate-300 font-bold">
+                    رقم الحساب:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm font-black text-amber-400">
+                      {paymentMethod === 'zaincash' ? paymentAccounts.zaincash : paymentAccounts.mastercard}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = paymentMethod === 'zaincash' ? paymentAccounts.zaincash : paymentAccounts.mastercard;
+                        navigator.clipboard.writeText(val);
+                        setCopiedAccount(val);
+                        setTimeout(() => setCopiedAccount(null), 2000);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-bold cursor-pointer"
+                    >
+                      {copiedAccount ? 'تم النسخ!' : 'نسخ'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt Upload & Transaction Ref */}
+              <div className="space-y-2">
+                <label className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-700 hover:border-amber-400 bg-slate-800/40 cursor-pointer text-xs text-slate-300 font-bold">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => setReceiptImage(event.target?.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <Upload className="h-4 w-4 text-amber-400" />
+                  <span>{receiptImage ? '✓ تم إرفاق الوصل (اضغط للتغيير)' : 'اضغط لإرفاق صورة وصل التحويل'}</span>
+                </label>
+
+                <input
+                  type="text"
+                  value={transactionRef}
+                  onChange={(e) => setTransactionRef(e.target.value)}
+                  placeholder="أو أدخل رقم الإشعار / العملية (اختياري مع الوصل)"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs text-white focus:border-amber-400 focus:outline-none font-mono"
+                />
+              </div>
+
+              {errorMessage && (
+                <div className="p-2.5 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-200 flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setStep('create')}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+                >
+                  ← رجوع
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmAndPublish}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-2.5 px-4 text-xs shadow-lg cursor-pointer active:scale-98"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>تأكيد الإرسال للمدير والنشر الفوري</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* 4. SUCCESS STATE */}
+          {/* ========================================================================= */}
+          {step === 'success' && (
+            <div className="space-y-4 text-center py-6 animate-in zoom-in-95 duration-200">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/50">
+                <CheckCircle className="h-7 w-7 animate-bounce" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="font-display text-base font-black text-white">
+                  تم إرسال لوحتك الإعلانية للمدير بنجاح!
+                </h3>
+                <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+                  تم استلام طلب الإعلان وتوثيق رقم هاتفك بنجاح. ستظهر لوحتك في صدارة{' '}
+                  <strong className="text-amber-300">
+                    {selectedTier.scope === 'national' ? 'عموم العراق' : currentCategoryObj.title}
+                  </strong>{' '}
+                  فور اعتماد التحويل.
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-slate-950/70 border border-slate-800 p-4 text-xs text-slate-300 space-y-2 max-w-sm mx-auto text-right">
-                <div className="flex justify-between border-b border-slate-800 pb-1.5">
-                  <span className="text-slate-400">اسم المتجر:</span>
-                  <span className="font-bold text-white">{businessName}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-800 pb-1.5">
-                  <span className="text-slate-400">الباقة والنطاق:</span>
-                  <span className="font-bold text-amber-400">{selectedTier.label}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-800 pb-1.5">
-                  <span className="text-slate-400">طريقة الدفع:</span>
-                  <span className="font-bold text-sky-400">
-                    {paymentMethod === 'zaincash' ? 'زين كاش' : 'ماستر كارد'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">حالة الإعلان:</span>
-                  <span className="font-bold text-amber-300">بانتظار موافقة ونشر المدير</span>
-                </div>
-              </div>
-
-              <div className="pt-3">
+              <div className="pt-2">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-2.5 text-xs transition-colors cursor-pointer shadow-md"
+                  className="rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-black py-2.5 px-6 text-xs cursor-pointer hover:opacity-95"
                 >
-                  تم، العودة إلى التطبيق
+                  تم، العودة لدليل العراق
                 </button>
               </div>
             </div>

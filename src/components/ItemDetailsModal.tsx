@@ -30,9 +30,11 @@ import {
   Upload,
   Image as ImageIcon,
   UtensilsCrossed,
+  FileText,
 } from 'lucide-react';
 import { DirectoryItem, StoreMenuItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
+import { useWallet } from '../context/WalletContext';
 import { StoreShareModal } from './StoreShareModal';
 import { StoreLocationMap } from './StoreLocationMap';
 import { StoreMenuSection } from './StoreMenuSection';
@@ -101,12 +103,14 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   onReportStore,
 }) => {
   const { deleteStore, isUserStoreOwner, updateStore, unclaimStore, items } = useDirectory();
+  const { isManagerUnlocked } = useWallet();
 
   // Always use the latest live store data from directory state
   const currentStore = (items && items.find((i) => i.id === item?.id)) || item;
 
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showManagerDeleteConfirm, setShowManagerDeleteConfirm] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   // Menu & Location interactive states
@@ -122,7 +126,8 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
 
   if (!item) return null;
 
-  const isOwner = isUserStoreOwner(currentStore.id);
+  // General manager has full owner permissions across all stores in the application
+  const isOwner = isUserStoreOwner(currentStore.id) || isManagerUnlocked;
   const canManagePhotos = isOwner;
 
   const handleSaveMenu = (newMenu: StoreMenuItem[], newMenuImages: string[]) => {
@@ -295,6 +300,138 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
           {statusMessage && (
             <div className="rounded-2xl bg-emerald-600 text-white p-2.5 text-xs font-bold text-center shadow-md animate-in fade-in">
               {statusMessage}
+            </div>
+          )}
+
+          {/* =========================================================================
+              MANAGER SUPERADMIN CONTROLS (صلاحيات المدير العام للمتجر)
+              ========================================================================= */}
+          {isManagerUnlocked && (
+            <div className="rounded-2xl bg-gradient-to-r from-amber-500/20 via-amber-400/10 to-amber-500/20 border-2 border-amber-500/60 p-3.5 space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500 text-slate-950 font-black text-xs shadow-xs">
+                    👑
+                  </span>
+                  <div>
+                    <span className="font-display text-xs font-black text-amber-950 block">
+                      صلاحيات المدير العام مفعّلة بالكامل لهذا المتجر 🇮🇶
+                    </span>
+                    <span className="text-[10px] text-amber-900 font-medium">
+                      يمكنك تعديل أي بيانات، إدارة الصور والمنيو، تغيير حالة الفتح، أو حذف المتجر
+                    </span>
+                  </div>
+                </div>
+                <span className="rounded-lg bg-amber-500 text-slate-950 text-[10px] font-black px-2 py-0.5">
+                  تحكم إداري مباشر
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                {onEditStore && (
+                  <button
+                    type="button"
+                    onClick={() => onEditStore(currentStore)}
+                    className="flex items-center justify-center gap-1.5 rounded-xl bg-white border border-amber-400/80 py-2 px-2 text-xs font-bold text-slate-900 hover:bg-amber-50 cursor-pointer shadow-2xs transition-all active:scale-95"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 text-amber-600" />
+                    <span>تعديل المتجر</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowMenuEditor(true)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-white border border-amber-400/80 py-2 px-2 text-xs font-bold text-slate-900 hover:bg-amber-50 cursor-pointer shadow-2xs transition-all active:scale-95"
+                >
+                  <UtensilsCrossed className="h-3.5 w-3.5 text-amber-600" />
+                  <span>المنيو والأسعار</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowImageManager(true)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-white border border-amber-400/80 py-2 px-2 text-xs font-bold text-slate-900 hover:bg-amber-50 cursor-pointer shadow-2xs transition-all active:scale-95"
+                >
+                  <Camera className="h-3.5 w-3.5 text-amber-600" />
+                  <span>إدارة الصور</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleOpenStatus}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 text-xs font-bold text-white cursor-pointer shadow-2xs transition-all active:scale-95 ${
+                    currentStore.isOpen ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                >
+                  <span>{currentStore.isOpen ? 'تحويل لمغلق' : 'تحويل لمفتوح'}</span>
+                </button>
+              </div>
+
+              {/* Verification & Instant Delete by Manager */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-amber-400/30">
+                <div className="flex items-center gap-2">
+                  {currentStore.isClaimed || currentStore.claimStatus === 'verified' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unclaimStore(currentStore.id);
+                        setStatusMessage('تم إلغاء توثيق هذا المتجر وإعادته كمتجر غير مطالب به');
+                        setTimeout(() => setStatusMessage(null), 3000);
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:text-rose-800 bg-rose-50 border border-rose-200 rounded-lg px-2.5 py-1 cursor-pointer transition-colors"
+                    >
+                      <span>إلغاء التوثيق</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateStore(currentStore.id, { isClaimed: true, claimStatus: 'verified', claimedAt: new Date().toISOString() });
+                        setStatusMessage('تم توثيق المتجر فورياً بصفة رسمية من قبل المدير العام 🛡️');
+                        setTimeout(() => setStatusMessage(null), 3000);
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-bold text-emerald-800 hover:text-emerald-900 bg-emerald-50 border border-emerald-300 rounded-lg px-2.5 py-1 cursor-pointer transition-colors"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>توثيق ملكية المتجر فوراً كمدير</span>
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  {showManagerDeleteConfirm ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteStore(currentStore.id);
+                          onClose();
+                        }}
+                        className="rounded-lg bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 text-[11px] font-bold cursor-pointer"
+                      >
+                        تأكيد حذف المتجر نهائياً
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowManagerDeleteConfirm(false)}
+                        className="rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 px-2 py-1 text-[11px] font-bold cursor-pointer"
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowManagerDeleteConfirm(true)}
+                      className="flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:text-rose-800 hover:bg-rose-50 rounded-lg px-2 py-1 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>حذف المتجر كمدير</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -504,13 +641,63 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
               الملف التعريفي للمتجر والمعلومات
             </h3>
 
-            {/* Description */}
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold text-slate-500">نبذة عن المتجر والخدمات:</span>
-              <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                {item.description || 'متجر معتمد ومسجل رسمياً في دليل العراق، يقدم خدمات ومنتجات متميزة لزبائنه الكرام.'}
-              </p>
-            </div>
+            {/* Description / Bio */}
+            {item.description && item.description.trim().length > 0 ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-red-500" />
+                    النبذة التعريفية للمتجر والخدمات:
+                  </span>
+                  {isOwner && onEditStore && (
+                    <button
+                      onClick={() => onEditStore(item)}
+                      className="text-[10px] font-bold text-red-600 hover:text-red-700 flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                      تعديل النبذة ✏️
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                  {item.description}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/60 p-3.5 space-y-2.5">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-2 rounded-xl bg-amber-100 text-amber-700 shrink-0 mt-0.5">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <h4 className="text-xs font-bold text-slate-900">
+                      لم يتم كتابة النبذة التعريفية بعد
+                    </h4>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      يُترك لصاحب المتجر عند توثيق متجره كتابة نوع الأكلات، أنواع الألبسة، اختصاصات العيادة، وتفاصيل السلع والخدمات بدقة.
+                    </p>
+                  </div>
+                </div>
+
+                {isOwner && onEditStore ? (
+                  <button
+                    onClick={() => onEditStore(item)}
+                    className="w-full py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    <span>اكتب نبذة عن متجرك، نوع الأكلات، الألبسة، أو الخدمات الآن ✍️</span>
+                  </button>
+                ) : !item.isClaimed && onClaimStore ? (
+                  <button
+                    onClick={() => onClaimStore(item)}
+                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Crown className="h-3.5 w-3.5" />
+                    <span>هل أنت صاحب المتجر؟ وثّق متجرك لكتابة النبذة وقائمة الأصناف 👑</span>
+                  </button>
+                ) : null}
+              </div>
+            )}
 
             {/* Info Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -524,12 +711,37 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
               </div>
 
               {/* Exact Address */}
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-slate-700">
-                <MapPin className="h-4 w-4 text-sky-600 shrink-0" />
-                <div>
-                  <span className="font-bold text-slate-900 block text-[11px]">العنوان الدقيق:</span>
-                  <span className="text-slate-600">{item.address || 'العراق'}</span>
+              <div className="flex items-start justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-slate-700">
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-slate-900 block text-[11px]">العنوان الدقيق:</span>
+                    {item.address && item.address.trim().length > 0 ? (
+                      <span className="text-slate-800 font-semibold">{item.address}</span>
+                    ) : (
+                      <span className="text-amber-800 text-[11px] font-medium block">
+                        لم يُحدد بعد (يُترك للمالك الموثق)
+                      </span>
+                    )}
+                  </div>
                 </div>
+                {isOwner && onEditStore ? (
+                  <button
+                    type="button"
+                    onClick={() => onEditStore(item)}
+                    className="text-[10px] font-bold text-sky-600 hover:text-sky-700 shrink-0 cursor-pointer pt-0.5"
+                  >
+                    {item.address ? 'تعديل ✏️' : 'إضافة عنوان ✏️'}
+                  </button>
+                ) : !item.isClaimed && onClaimStore ? (
+                  <button
+                    type="button"
+                    onClick={() => onClaimStore(item)}
+                    className="text-[10px] font-bold text-amber-600 hover:text-amber-700 shrink-0 cursor-pointer pt-0.5"
+                  >
+                    وثّق وأضف 👑
+                  </button>
+                ) : null}
               </div>
 
               {/* Phone */}
@@ -635,6 +847,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
             isOwner={isOwner}
             onOpenMenuEditor={() => setShowMenuEditor(true)}
             onOpenImageZoom={(url) => setZoomImageUrl(url)}
+            onClaimStore={onClaimStore}
           />
 
           {/* =========================================================================
@@ -644,6 +857,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
             item={currentStore}
             isOwner={isOwner}
             onOpenEditLocation={() => onEditStore?.(currentStore)}
+            onClaimStore={onClaimStore}
           />
 
           {/* =========================================================================

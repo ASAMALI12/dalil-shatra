@@ -592,7 +592,7 @@ export async function processAndDeduplicateStores(
       sub_category: c.subCategory || null,
       phone: phoneVal.formattedDisplay || cleanPhone,
       whatsapp: cleanPhone, // Valid phone used for business WhatsApp inquiry
-      address: c.address ? c.address.trim() : `${c.governorateName} - العراق`,
+      address: c.address ? c.address.trim() : '',
       governorate_id: c.governorateId,
       governorate_name: c.governorateName,
       district_id: c.districtId || null,
@@ -602,7 +602,7 @@ export async function processAndDeduplicateStores(
       is_open: true,
       working_hours: c.workingHours || '٩:٠٠ ص - ١٠:٠٠ م',
       image_url: null, // No fake placeholder stock photos
-      description: `نشاط تجاري معتمد في ${c.governorateName} - ${cleanName}. هاتف العمل المباشر: ${phoneVal.formattedDisplay || cleanPhone}.`,
+      description: '',
       tags: [c.governorateName, c.category, 'نشاط موثق'],
       featured: false,
       is_claimed: isClaimed,

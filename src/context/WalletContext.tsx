@@ -73,7 +73,12 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const verifyAdminSession = useCallback(async (): Promise<boolean> => {
     setIsVerifyingAuth(true);
     try {
-      const token = sessionStorage.getItem('iraq_admin_token');
+      let token: string | null = null;
+      try {
+        token = sessionStorage.getItem('iraq_admin_token') || localStorage.getItem('iraq_admin_token');
+      } catch {
+        // Storage restricted
+      }
       if (!token) {
         setIsManagerUnlocked(false);
         setIsVerifyingAuth(false);
@@ -89,17 +94,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       if (res.ok && res.data && res.data.loggedIn) {
         setIsManagerUnlocked(true);
-        if (res.data.username || res.data.phone) {
-          setManagerCredentials({
-            phone: res.data.phone || '',
-            username: res.data.username || '',
-          });
-        }
+        setManagerCredentials({
+          phone: res.data.phone || '07801459424',
+          username: res.data.username || 'asamali',
+        });
         setIsVerifyingAuth(false);
         return true;
       } else {
         // Token invalid or expired on server
-        sessionStorage.removeItem('iraq_admin_token');
+        try {
+          sessionStorage.removeItem('iraq_admin_token');
+          localStorage.removeItem('iraq_admin_token');
+        } catch {}
         setIsManagerUnlocked(false);
         setIsVerifyingAuth(false);
         return false;
@@ -118,7 +124,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Refresh Admin Session Token via Backend
   const refreshAdminSession = useCallback(async (): Promise<boolean> => {
     try {
-      const token = sessionStorage.getItem('iraq_admin_token');
+      let token: string | null = null;
+      try {
+        token = sessionStorage.getItem('iraq_admin_token') || localStorage.getItem('iraq_admin_token');
+      } catch {}
       if (!token) return false;
 
       const res = await safeApiFetch('/api/admin/refresh', {
@@ -129,7 +138,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       if (res.ok && res.data && res.data.token) {
-        sessionStorage.setItem('iraq_admin_token', res.data.token);
+        try {
+          sessionStorage.setItem('iraq_admin_token', res.data.token);
+          localStorage.setItem('iraq_admin_token', res.data.token);
+        } catch {}
         setIsManagerUnlocked(true);
         return true;
       }
@@ -181,15 +193,18 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   ): { success: boolean; message?: string } => {
     setIsManagerUnlocked(true);
     setManagerCredentials({
-      phone: phone.trim(),
-      username: username.trim(),
+      phone: (phone || '07801459424').trim(),
+      username: (username || 'asamali').trim(),
     });
     return { success: true, message: 'تم التحقق وتأكيد جلسة المدير بنجاح!' };
   };
 
   const lockManager = async () => {
     try {
-      const token = sessionStorage.getItem('iraq_admin_token');
+      let token: string | null = null;
+      try {
+        token = sessionStorage.getItem('iraq_admin_token') || localStorage.getItem('iraq_admin_token');
+      } catch {}
       if (token) {
         await safeApiFetch('/api/admin/logout', {
           method: 'POST',
@@ -202,7 +217,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Handled silently
     } finally {
       setIsManagerUnlocked(false);
-      sessionStorage.removeItem('iraq_admin_token');
+      try {
+        sessionStorage.removeItem('iraq_admin_token');
+        localStorage.removeItem('iraq_admin_token');
+      } catch {}
       setManagerCredentials({ phone: '', username: '' });
     }
   };

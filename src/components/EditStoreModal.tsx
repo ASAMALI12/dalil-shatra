@@ -27,7 +27,7 @@ import {
 import { DirectoryItem, StoreMenuItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
 import { useNotification } from '../context/NotificationContext';
-import { IRAQ_GOVERNORATES } from '../data/iraqLocations';
+import { IRAQ_GOVERNORATES, DISTRICT_COORDINATES } from '../data/iraqLocations';
 
 // Compress image file helper
 const compressImageFile = (file: File): Promise<string> => {
@@ -146,8 +146,10 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
   const [offerScope, setOfferScope] = useState<'district' | 'governorate' | 'iraq'>('district');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
 
-  // Success indicator
+  // Success and Error indicators
   const [successSaved, setSuccessSaved] = useState(false);
+  const [validationError, setValidationError] = useState('');
+  const [broadcastSuccessMessage, setBroadcastSuccessMessage] = useState('');
 
   // Populate state on open
   useEffect(() => {
@@ -261,6 +263,22 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
     setGpsError('');
   };
 
+  // Set coordinates to district center
+  const handleUseDistrictCoords = () => {
+    setGpsError('');
+    if (districtId && DISTRICT_COORDINATES[districtId]) {
+      const coord = DISTRICT_COORDINATES[districtId];
+      setLatInput(String(coord.lat));
+      setLngInput(String(coord.lng));
+    } else {
+      const govObj = IRAQ_GOVERNORATES.find((g) => g.id === governorateId);
+      if (govObj?.center) {
+        setLatInput(String(govObj.center.lat));
+        setLngInput(String(govObj.center.lng));
+      }
+    }
+  };
+
   // Cover upload
   const handleCoverFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -363,14 +381,15 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
   // Save all modified store information
   const handleSaveAll = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError('');
 
     if (!name.trim()) {
-      alert('اسم المتجر مطلوب');
+      setValidationError('اسم المتجر مطلوب! يرجى إدخال اسم المتجر.');
       setActiveTab('basic_location');
       return;
     }
     if (!phone.trim()) {
-      alert('رقم هاتف المتجر مطلوب');
+      setValidationError('رقم هاتف المتجر مطلوب! يرجى إدخال رقم هاتف للتواصل.');
       setActiveTab('contact_social');
       return;
     }
@@ -480,8 +499,11 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
     });
 
     setIsBroadcasting(false);
-    alert(`تم بنجاح بث الإشعار إلى [${scopeLabel}] وحفظه في سجل إشعارات الدليل! 🎉`);
+    setBroadcastSuccessMessage(`تم بنجاح بث الإشعار إلى [${scopeLabel}] وحفظه في سجل إشعارات الدليل! 🎉`);
     setOfferTitle('');
+    setTimeout(() => {
+      setBroadcastSuccessMessage('');
+    }, 6000);
   };
 
   // Current selected governorate object for district dropdown
@@ -651,15 +673,18 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
               {/* SubCategory */}
               <div>
                 <label className="mb-1 block font-display text-xs font-bold text-slate-700">
-                  التخصص الدقيق أو نوع النشاط
+                  نوع الأكلات / الألبسة / اختصاص العيادة والنشاط 🏷️
                 </label>
                 <input
                   type="text"
                   value={subCategory}
                   onChange={(e) => setSubCategory(e.target.value)}
-                  placeholder="مثال: مأكولات شرقية ومشويات، أزياء رجالية، صيدلية..."
+                  placeholder="مثال: مشاوي ومأكولات شرقية / أزياء رجالية / عيادة أسنان / سوبرماركت..."
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
                 />
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  حدد بدقة نوع الأكلات للمطاعم، أو نوع الألبسة للمحلات، أو اختصاص العيادة للأطباء، ليظهر للزبائن بوضوح.
+                </span>
               </div>
 
               {/* Governorate & District Selector */}
@@ -702,16 +727,18 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
               {/* Exact Written Address */}
               <div>
                 <label className="mb-1 block font-display text-xs font-bold text-slate-700">
-                  العنوان التفصيلي (الشارع، الحي، أقرب نقطة دالة) *
+                  العنوان التفصيلي الدقيق لمتجرك (الشارع، الحي، أقرب نقطة دالة) 📍
                 </label>
                 <input
                   type="text"
-                  required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="مثال: شارع الكورنيش، قرب جسر الشطرة، مجاور المصرف التجاري"
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none"
                 />
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  بصفتك المالك المعتمد، اكتب العنوان الحقيقي الدقيق لمتجرك ليتمكن الزبائن وسائقو التوصيل من الوصول إليك بسهولة.
+                </span>
               </div>
 
               {/* Accurate Map & GPS Section */}
@@ -723,15 +750,26 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
                       تحديد الموقع الدقيق على خرائط Google و GPS
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleDetectCurrentGps}
-                    disabled={isLocatingGps}
-                    className="flex items-center gap-1 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white px-2.5 py-1 text-[11px] font-bold shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <Compass className="h-3 w-3" />
-                    <span>{isLocatingGps ? 'جارِ الجلب...' : 'جلب موقعي الحالي (GPS) 📍'}</span>
-                  </button>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleUseDistrictCoords}
+                      className="flex items-center gap-1 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 px-2.5 py-1 text-[11px] font-bold shadow-2xs transition-all cursor-pointer"
+                      title="ملء إحداثيات مركز القضاء/المدينة تلقائياً"
+                    >
+                      <MapPin className="h-3 w-3 text-sky-600" />
+                      <span>إحداثيات مركز {districtName || 'القضاء'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDetectCurrentGps}
+                      disabled={isLocatingGps}
+                      className="flex items-center gap-1 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-95 text-white px-2.5 py-1 text-[11px] font-bold shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Compass className="h-3 w-3" />
+                      <span>{isLocatingGps ? 'جارِ الجلب...' : 'موقعي الحالي (GPS) 📍'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-[11px] text-slate-600 leading-relaxed">
@@ -846,15 +884,18 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
               {/* Description */}
               <div>
                 <label className="mb-1 block font-display text-xs font-bold text-slate-700">
-                  نبذة ووصف المتجر والخدمات المقدمة
+                  النبذة التعريفية ووصف الخدمات والسلع 📝
                 </label>
                 <textarea
                   rows={3}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="اكتب نبذة ترحيبية بالزبائن توضح أهم الخدمات والمنتجات والعروض..."
+                  placeholder="اكتب نبذة تعريفية لمتجرك توضح تخصصك بدقة، الأكلات والوجبات، أنواع الألبسة، أو تفاصيل العيادة والخدمات..."
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold text-slate-800 focus:border-red-500 focus:outline-none resize-none"
                 />
+                <span className="text-[10px] text-slate-500 mt-1 block">
+                  تظهر هذه النبذة في أعلى صفحة متجرك وتساعد الزبائن على التعرف على نشاطك الحقيقي وتفاصيل ما تقدمه.
+                </span>
               </div>
             </div>
           )}
@@ -1467,10 +1508,25 @@ export const EditStoreModal: React.FC<EditStoreModalProps> = ({
                     {isBroadcasting ? 'جارِ البث...' : 'بث الإشعار للزبائن 📢'}
                   </button>
                 </div>
+
+                {broadcastSuccessMessage && (
+                  <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-right text-xs font-bold text-emerald-800 animate-in fade-in flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>{broadcastSuccessMessage}</span>
+                  </div>
+                )}
               </form>
             </div>
           )}
         </div>
+
+        {/* Validation Error Banner */}
+        {validationError && (
+          <div className="px-4 py-2 bg-rose-50 border-t border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+            <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+            <span>{validationError}</span>
+          </div>
+        )}
 
         {/* Modal Bottom Sticky Footer */}
         <div className="border-t border-slate-200 p-3.5 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
