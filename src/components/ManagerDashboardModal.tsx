@@ -121,6 +121,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   const [newStoreImage, setNewStoreImage] = useState(
     'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=600&auto=format&fit=crop&q=80'
   );
+  const [addStoreError, setAddStoreError] = useState('');
 
   // Broadcast Notification State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -160,30 +161,11 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
       const data = resp.data || (typeof resp.json === 'function' ? await resp.json() : null);
       if (resp.ok && data?.success) {
         setLoginStep('otp');
-        setOtpGeneratedCode(data.code || '');
+        setOtpGeneratedCode('');
         setWhatsappUrl(data.whatsappUrl || '');
         setWhatsappNativeUrl(data.whatsappNativeUrl || '');
         setShowOtpCode(false);
         setCopiedOtp(false);
-
-        // Attempt browser push notification if permitted
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-          try {
-            if (Notification.permission === 'granted') {
-              new Notification('رمز تأكيد مدير دليل العراق 🇮🇶', {
-                body: `رمز التحقق الخاص بك هو: ${data.code}`,
-              });
-            } else if (Notification.permission === 'default') {
-              Notification.requestPermission().then((p) => {
-                if (p === 'granted') {
-                  new Notification('رمز تأكيد مدير دليل العراق 🇮🇶', {
-                    body: `رمز التحقق الخاص بك هو: ${data.code}`,
-                  });
-                }
-              }).catch(() => {});
-            }
-          } catch {}
-        }
       } else {
         setLoginError(resp.error || data?.error || 'بيانات المدير غير مطابقة. يرجى التأكد من رقم الهاتف واسم المستخدم وكلمة المرور.');
       }
@@ -194,7 +176,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     }
   };
 
-  // Reusable Unlock Helper (Works with typed code, pasted code, or instant one-click code)
+  // Reusable Unlock Helper (Works with typed code or pasted code)
   const doUnlockWithOtp = async (codeToUse: string) => {
     setLoginError('');
 
@@ -209,9 +191,15 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
       return;
     }
 
-    const phoneToUse = (loginPhone || '07801459424').trim();
-    const userToUse = (loginUsername || 'asamali').trim();
-    const passToUse = (loginPassword || 'AsamasaM12').trim();
+    const phoneToUse = loginPhone.trim();
+    const userToUse = loginUsername.trim();
+    const passToUse = loginPassword.trim();
+
+    if (!userToUse || !passToUse) {
+      setLoginError('يرجى إعادة إدخال بيانات الدخول كاملة.');
+      setLoginStep('credentials');
+      return;
+    }
 
     setIsVerifying(true);
     try {
@@ -320,16 +308,17 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   // Handle Add New Store by Manager
   const handleAddStoreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setAddStoreError('');
     if (!newStoreName.trim()) return;
 
     if (!newStorePhone.trim()) {
-      alert('يجب إدخال رقم هاتف عراقي حقيقي لتمكين تواصل الزبائن مع المتجر.');
+      setAddStoreError('يجب إدخال رقم هاتف عراقي حقيقي لتمكين تواصل الزبائن مع المتجر.');
       return;
     }
 
     const phoneValidation = validateIraqPhone(newStorePhone);
     if (!phoneValidation.isValid) {
-      alert(`رقم الهاتف غير صالح: ${phoneValidation.reason}\nيجب إدخال رقم هاتف عراقي حقيقي لشبكات زين، آسيا سيل، أو كورك.`);
+      setAddStoreError(`رقم الهاتف غير صالح: ${phoneValidation.reason}. يجب إدخال رقم هاتف عراقي حقيقي لشبكات زين، آسيا سيل، أو كورك.`);
       return;
     }
 
@@ -401,39 +390,19 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
       return;
     }
 
-    if (newPassword) {
-      try {
-        const token = sessionStorage.getItem('iraq_admin_token');
-        const resp = await safeApiFetch('/api/admin/change-password', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'x-admin-token': token || '',
-          },
-          body: JSON.stringify({
-            currentPassword: currPass,
-            newPassword: newPassword,
-          }),
-        });
-        const data = await resp.json().catch(() => ({}));
-        if (!resp.ok || !data.success) {
-          setSecurityErrorMsg(data.error || 'فشل تغيير كلمة المرور. تأكد من كلمة المرور الحالية.');
-          return;
-        }
-      } catch {
-        setSecurityErrorMsg('تعذر الاتصال بالخادم لتحديث كلمة المرور.');
-        return;
-      }
-    }
-
-    updateManagerCredentials(
+    const credsResult = await updateManagerCredentials(
       currPass,
       newPhone || managerCredentials.phone,
-      newUsername || managerCredentials.username
+      newUsername || managerCredentials.username,
+      newPassword || undefined
     );
 
-    setSecuritySuccessMsg('تم تحديث بيانات الدخول بنجاح!');
+    if (!credsResult.success) {
+      setSecurityErrorMsg(credsResult.message || 'فشل تحديث بيانات المدير.');
+      return;
+    }
+
+    setSecuritySuccessMsg('تم تحديث وحفظ بيانات المدير في قاعدة البيانات بنجاح!');
     setCurrPass('');
     setNewPassword('');
     setTimeout(() => setSecuritySuccessMsg(''), 4000);
@@ -624,101 +593,20 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                     تأكيد ملكية رقم الهاتف عبر واتساب
                   </h4>
                   <p className="text-xs text-slate-300 leading-relaxed">
-                    تم إعداد رمز التحقق السري لحساب الواتساب الخاص بالمدير (••••••••{loginPhone.trim().slice(-3) || '424'}).
+                    تم إرسال رمز التحقق السري (OTP) إلى حساب الواتساب الخاص بالمدير ({loginPhone.trim() ? `••••••••${loginPhone.trim().slice(-3)}` : 'المعتمد'}). الرمز صالح لمدة 5 دقائق.
                   </p>
                 </div>
 
                 <div className="w-full max-w-sm space-y-3.5 text-right">
-                  {/* Quick Instant Unlock for Manager without switching apps */}
-                  <div className="rounded-2xl bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border-2 border-amber-500/50 p-3.5 space-y-2.5 text-center shadow-lg animate-in fade-in">
-                    <div className="flex items-center justify-center gap-1.5 text-amber-300 font-bold text-xs">
-                      <span>⚡</span>
-                      <span>الدخول السريع كمدير (دون مغادرة التطبيق)</span>
+                  {/* WhatsApp Verification Notice */}
+                  <div className="rounded-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-700/80 p-4 space-y-2 text-center shadow-lg animate-in fade-in">
+                    <div className="flex items-center justify-center gap-1.5 text-emerald-400 font-bold text-xs">
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>رمز التحقق في طريقه عبر تطبيق واتساب</span>
                     </div>
-
                     <p className="text-[11px] text-slate-300 leading-relaxed">
-                      لأن تطبيق واتساب لا يُصدر إشعاراً منبثقاً تلقائياً، يمكنك إكمال التحقق فوراً بضغطة زر واحدة:
+                      يصلك رمز التحقق المكون من 6 أرقام عبر رسالة واتساب على هاتفك. لا تشارك هذا الرمز مع أي شخص.
                     </p>
-
-                    <button
-                      type="button"
-                      disabled={isVerifying || !otpGeneratedCode}
-                      onClick={() => doUnlockWithOtp(otpGeneratedCode)}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 active:scale-95 text-slate-950 font-black py-3 px-4 text-xs shadow-lg shadow-amber-500/20 transition-all cursor-pointer border border-amber-300"
-                    >
-                      {isVerifying ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin text-slate-950" />
-                          <span>جاري فتح صلاحيات المدير...</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldCheck className="h-4 w-4 text-slate-950" />
-                          <span>تأكيد الرمز والدخول المباشر فوراً 👑</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Direct Code Reveal / Copy Option */}
-                  <div className="rounded-xl border border-slate-700/80 bg-slate-900/80 p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-slate-300">
-                        رمز التحقق الخاص بك:
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setShowOtpCode(!showOtpCode)}
-                        className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
-                      >
-                        {showOtpCode ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        <span>{showOtpCode ? 'إخفاء الرمز' : 'إظهار الرمز ونسخه'}</span>
-                      </button>
-                    </div>
-
-                    {showOtpCode && (
-                      <div className="flex items-center justify-between bg-slate-950 rounded-lg p-2 border border-slate-800 animate-in fade-in">
-                        <span className="font-mono text-base font-black text-amber-400 tracking-widest" dir="ltr">
-                          {otpGeneratedCode}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              try {
-                                navigator.clipboard.writeText(otpGeneratedCode);
-                                setCopiedOtp(true);
-                                setTimeout(() => setCopiedOtp(false), 2000);
-                              } catch {}
-                            }}
-                            className="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-white rounded px-2.5 py-1 flex items-center gap-1 cursor-pointer"
-                          >
-                            <Clipboard className="h-3 w-3 text-amber-400" />
-                            <span>{copiedOtp ? 'تم النسخ! ✓' : 'نسخ'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWhatsappOtp(otpGeneratedCode);
-                              setLoginError('');
-                            }}
-                            className="text-[10px] font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 rounded px-2.5 py-1 cursor-pointer font-bold"
-                          >
-                            تعبئة
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Informational Note about WhatsApp Notifications */}
-                  <div className="rounded-xl bg-slate-900/90 border border-slate-700/60 p-2.5 text-[11px] text-slate-300 leading-relaxed flex items-start gap-2">
-                    <span className="text-amber-400 shrink-0 mt-0.5">💡</span>
-                    <span>
-                      <strong>لماذا لم يصل إشعار تلقائي من واتساب؟</strong><br />
-                      تطبيق واتساب لا يُصدر إشعارات خارجية على شاشة القفل تلقائياً إلا إذا كان هناك خادم مخصص مرتبط بـ Meta WhatsApp Business API.
-                      لذا تم توفير زر الدخول المباشر وزر نسخ الرمز أعلاه، بالإضافة إلى خيار فتح تطبيق واتساب أدناه.
-                    </span>
                   </div>
 
                   {/* Step 1 in OTP: Open WhatsApp and Copy Code */}
@@ -1104,6 +992,13 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                           />
                         </div>
                       </div>
+
+                      {addStoreError && (
+                        <div className="rounded-xl border border-rose-500/50 bg-rose-950/80 p-3 text-xs font-bold text-rose-300 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                          <span>{addStoreError}</span>
+                        </div>
+                      )}
 
                       <button
                         type="submit"

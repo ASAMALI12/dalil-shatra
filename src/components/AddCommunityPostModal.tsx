@@ -80,6 +80,7 @@ export const AddCommunityPostModal: React.FC<AddCommunityPostModalProps> = ({
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [formError, setFormError] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
   if (!isOpen) return null;
@@ -124,13 +125,14 @@ export const AddCommunityPostModal: React.FC<AddCommunityPostModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
 
     if (!title.trim()) {
-      alert('يرجى كتابة الاسم أو العنوان الرئيسي');
+      setFormError('يرجى كتابة الاسم أو العنوان الرئيسي');
       return;
     }
     if (!phone.trim() || phone.trim().length < 7) {
-      alert('يرجى إدخال رقم هاتف صحيح للتواصل (7 أرقام على الأقل)');
+      setFormError('يرجى إدخال رقم هاتف صحيح للتواصل (7 أرقام على الأقل)');
       return;
     }
 
@@ -532,6 +534,14 @@ export const AddCommunityPostModal: React.FC<AddCommunityPostModalProps> = ({
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs font-medium text-slate-800 focus:border-sky-500 focus:bg-white focus:outline-none resize-none"
                 />
               </div>
+
+              {/* Form Error Banner */}
+              {formError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-right text-xs font-bold text-rose-700 animate-in fade-in flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+                  <span>{formError}</span>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button

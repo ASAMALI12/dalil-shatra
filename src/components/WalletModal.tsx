@@ -38,19 +38,19 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
 
   const [paymentConfig, setPaymentConfig] = useState({
     zaincash: {
-      number: '07801459424',
+      number: '',
       holder: 'محفظة زين كاش المعتمدة',
       title: 'محفظة زين كاش (ZainCash)',
       instructions: 'التحويل المباشر من تطبيق زين كاش إلى رقم المحفظة الموضح أعلاه، ثم إرفاق إشعار التحويل.',
     },
     mastercard: {
-      number: '4538548308',
+      number: '',
       holder: 'حساب ماستر كارد المعتمد',
       title: 'بطاقة وحساب ماستر كارد (MasterCard)',
       instructions: 'التحويل البنكي أو عبر تطبيق المصرف إلى رقم حساب الماستر كارد الموضح أعلاه، ثم إرفاق صورة الوصل.',
     },
-    managerPhone: '07801459424',
-    managerWhatsapp: '9647801459424',
+    managerPhone: '',
+    managerWhatsapp: '',
   });
 
   useEffect(() => {
@@ -136,7 +136,7 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
     const text = encodeURIComponent(
       `مرحباً إدارة دليل العراق، أود الاستفسار حول إشعار تحويل عبر ${
         selectedMethod === 'zaincash' ? 'زين كاش' : 'ماستر كارد'
-      }. رقم المحوّل: ${senderPhone || '07801459424'}`
+      }. رقم المحوّل: ${senderPhone || paymentConfig.managerPhone || ''}`
     );
     window.open(`https://wa.me/${paymentConfig.managerWhatsapp}?text=${text}`, '_blank');
   };

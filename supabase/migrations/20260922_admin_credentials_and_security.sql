@@ -1,18 +1,19 @@
 -- Admin Credentials table for secure authentication in Supabase
 CREATE TABLE IF NOT EXISTS public.admin_credentials (
-  id TEXT PRIMARY KEY,
-  phone TEXT NOT NULL,
-  username TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
+  id TEXT PRIMARY KEY DEFAULT 'primary_admin',
+  phone TEXT NOT NULL DEFAULT '',
+  username TEXT NOT NULL DEFAULT 'admin',
+  password_hash TEXT NOT NULL DEFAULT '',
   role TEXT DEFAULT 'superadmin',
+  otp_code_hash TEXT,
+  otp_expires_at BIGINT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert initial secure manager credentials if not exists
-INSERT INTO public.admin_credentials (id, phone, username, password_hash, role)
-VALUES ('primary_admin', '07801459424', 'asamali', 'AsamasaM12', 'superadmin')
-ON CONFLICT (id) DO NOTHING;
+-- Add columns if table already existed previously
+ALTER TABLE public.admin_credentials ADD COLUMN IF NOT EXISTS otp_code_hash TEXT;
+ALTER TABLE public.admin_credentials ADD COLUMN IF NOT EXISTS otp_expires_at BIGINT;
 
 -- Enable Row Level Security so no anonymous client can read admin credentials
 ALTER TABLE public.admin_credentials ENABLE ROW LEVEL SECURITY;

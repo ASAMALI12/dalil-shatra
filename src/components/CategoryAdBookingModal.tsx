@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Crown,
@@ -13,11 +13,13 @@ import {
   Upload,
   Copy,
   Check,
+  AlertCircle,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useCategoryAds } from '../context/CategoryAdsContext';
 import { useWallet } from '../context/WalletContext';
 import { useNotification } from '../context/NotificationContext';
+import { safeApiFetch } from '../utils/apiClient';
 
 interface CategoryAdBookingModalProps {
   isOpen: boolean;
@@ -101,10 +103,24 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
   const [adText, setAdText] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [transactionId, setTransactionId] = useState<string>('');
+  const [zainNumber, setZainNumber] = useState<string>('');
   const [copiedZainNumber, setCopiedZainNumber] = useState<boolean>(false);
   const [formError, setFormError] = useState('');
   const [paymentError, setPaymentError] = useState('');
   const [createdRefCode, setCreatedRefCode] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      safeApiFetch('/api/payment-details')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.success && data.zaincash?.number) {
+            setZainNumber(data.zaincash.number);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -112,9 +128,11 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
   const totalPrice = currentTier.price;
 
   const handleCopyZainNumber = () => {
-    navigator.clipboard.writeText('07801459424');
-    setCopiedZainNumber(true);
-    setTimeout(() => setCopiedZainNumber(false), 2500);
+    if (zainNumber) {
+      navigator.clipboard.writeText(zainNumber);
+      setCopiedZainNumber(true);
+      setTimeout(() => setCopiedZainNumber(false), 2500);
+    }
   };
 
   const handleProceedToPayment = (e: React.FormEvent) => {
@@ -454,7 +472,7 @@ export const CategoryAdBookingModal: React.FC<CategoryAdBookingModalProps> = ({
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-amber-400" />
                         <span className="font-mono text-sm sm:text-base font-black tracking-wider text-amber-300" dir="ltr">
-                          07801459424
+                          {zainNumber || 'المحفظة المعتمدة'}
                         </span>
                       </div>
 

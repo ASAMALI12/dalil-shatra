@@ -90,7 +90,7 @@ export const OFFERS_DATA: Offer[] = [
     originalPrice: '50,000 د.ع',
     discountedPrice: '45,000 د.ع',
     couponCode: 'SHATRA10',
-    phone: '07801234567',
+    phone: '07801122334',
   },
   {
     id: 'offer-2',
@@ -107,7 +107,7 @@ export const OFFERS_DATA: Offer[] = [
     originalPrice: '35,000 د.ع',
     discountedPrice: '29,750 د.ع',
     couponCode: 'ELEGANCE15',
-    phone: '07812345678',
+    phone: '07814455667',
   },
   {
     id: 'offer-3',
@@ -124,7 +124,7 @@ export const OFFERS_DATA: Offer[] = [
     originalPrice: '25,000 د.ع',
     discountedPrice: '20,000 د.ع',
     couponCode: 'MANDI20',
-    phone: '07823456789',
+    phone: '07825566778',
   },
   // Baghdad
   {
@@ -142,7 +142,7 @@ export const OFFERS_DATA: Offer[] = [
     originalPrice: '45,000 د.ع',
     discountedPrice: '38,000 د.ع',
     couponCode: 'SAMAD15',
-    phone: '07701234567',
+    phone: '07701987654',
   },
   {
     id: 'offer-bg-2',
@@ -159,7 +159,7 @@ export const OFFERS_DATA: Offer[] = [
     originalPrice: '800,000 د.ع',
     discountedPrice: '720,000 د.ع',
     couponCode: 'KARRADA10',
-    phone: '07712345678',
+    phone: '07712876543',
   },
   // Basra
   {

@@ -146,8 +146,8 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
 
   // Payment accounts
   const [paymentAccounts, setPaymentAccounts] = useState({
-    zaincash: '07801459424',
-    mastercard: '4538548308',
+    zaincash: '',
+    mastercard: '',
   });
 
   // Countdown timer for OTP resend
@@ -166,8 +166,8 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
         .then((data) => {
           if (data && data.success) {
             setPaymentAccounts({
-              zaincash: data.zaincash?.number || '07801459424',
-              mastercard: data.mastercard?.number || '4538548308',
+              zaincash: data.zaincash?.number || '',
+              mastercard: data.mastercard?.number || '',
             });
           }
         })
@@ -428,7 +428,7 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
       offerBadge: 'موثق 👑',
       durationDays: selectedTier.days,
       price: selectedTier.price,
-      paymentMethod: paymentMethod === 'zaincash' ? 'زين كاش (07801459424)' : 'ماستر كارد (4538548308)',
+      paymentMethod: paymentMethod === 'zaincash' ? `زين كاش (${paymentAccounts.zaincash || 'المعتمدة'})` : `ماستر كارد (${paymentAccounts.mastercard || 'المعتمدة'})`,
       receiptImage: receiptImage || undefined,
       aiStyle: {
         lightingTheme: activeAiStyle.id,
@@ -866,7 +866,7 @@ export const VerifiedStoreAdModal: React.FC<VerifiedStoreAdModalProps> = ({
                   >
                     <span className="text-base">📱</span>
                     <span className="text-xs font-bold">زين كاش (Zain Cash)</span>
-                    <span className="text-[11px] text-amber-300 font-mono font-bold">07801459424</span>
+                    <span className="text-[11px] text-amber-300 font-mono font-bold">{paymentAccounts.zaincash || 'المحفظة المعتمدة'}</span>
                   </button>
 
                   <button

@@ -8,6 +8,7 @@ import {
   Clock,
   Save,
   CheckCircle,
+  CheckCircle2,
   Camera,
   Tag,
   Plus,

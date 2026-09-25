@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   AlertTriangle,
@@ -16,7 +16,7 @@ import {
 import confetti from 'canvas-confetti';
 import { DirectoryItem } from '../types/shatrah';
 import { useDirectory } from '../context/DirectoryContext';
-import { useNotification } from '../context/NotificationContext';
+import { safeApiFetch } from '../utils/apiClient';
 
 interface ReportStoreModalProps {
   isOpen: boolean;
@@ -34,10 +34,6 @@ const COMMON_REASONS = [
   { id: 'other', label: 'ملاحظة أو اقتراح آخر للإدارة', icon: '📝' },
 ];
 
-// Official Administration Contact for Shatrah Directory
-const ADMIN_WHATSAPP = '9647801234567';
-const ADMIN_PHONE = '07801234567';
-
 export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
   isOpen,
   onClose,
@@ -45,7 +41,9 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
   onReportSubmitted,
 }) => {
   const { addReport } = useDirectory();
-  const { broadcastNotification } = useNotification();
+
+  const [adminPhone, setAdminPhone] = useState<string>('');
+  const [adminWhatsapp, setAdminWhatsapp] = useState<string>('');
 
   const [selectedReason, setSelectedReason] = useState<string>(COMMON_REASONS[0].label);
   const [details, setDetails] = useState<string>('');
@@ -53,6 +51,20 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
   const [reporterPhone, setReporterPhone] = useState<string>('');
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      safeApiFetch('/api/payment-details')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.success) {
+            if (data.managerPhone) setAdminPhone(data.managerPhone);
+            if (data.managerWhatsapp) setAdminWhatsapp(data.managerWhatsapp);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen || !item) return null;
 
@@ -91,14 +103,20 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
       reporterPhone: reporterPhone.trim() || undefined,
     });
 
-    // Notify the admin system
-    broadcastNotification({
-      title: '⚠️ بلاغ جديد من زائر حول متجر',
-      message: `تم استلام بلاغ حول "${item.name}" بسبب: ${selectedReason}`,
-      type: 'system',
-      targetId: item.id,
-      targetType: 'store',
-    });
+    // Send report to backend API
+    safeApiFetch('/api/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        storeId: item.id,
+        storeName: item.name,
+        storePhone: item.phone,
+        reason: selectedReason,
+        details: details.trim() || 'تم الإبلاغ عن طريق الزائر مباشرة',
+        reporterName: reporterName.trim() || 'زائر',
+        reporterPhone: reporterPhone.trim() || undefined,
+      }),
+    }).catch(() => {});
 
     setTimeout(() => {
       setIsSending(false);
@@ -122,7 +140,8 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
     // Also save in the system
     handleSubmitReport();
     // Open WhatsApp
-    const url = `https://wa.me/${ADMIN_WHATSAPP}?text=${generateWhatsAppMessage()}`;
+    const targetWhatsapp = (adminWhatsapp || '9647800000000').replace(/[^0-9]/g, '');
+    const url = `https://wa.me/${targetWhatsapp}?text=${generateWhatsAppMessage()}`;
     window.open(url, '_blank');
   };
 
@@ -331,7 +350,7 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
                   </button>
 
                   <a
-                    href={`tel:${ADMIN_PHONE}`}
+                    href={adminPhone ? `tel:${adminPhone}` : '#'}
                     className="flex items-center justify-center gap-1.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 hover:bg-rose-100 py-2.5 px-3 font-display text-xs font-bold transition-all"
                   >
                     <Phone className="h-3.5 w-3.5 text-rose-600" />

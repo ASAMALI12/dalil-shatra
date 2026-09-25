@@ -36,18 +36,41 @@ function getServerSupabase(): SupabaseClient | null {
   return serverSupabase;
 }
 
-// Admin credentials configured via environment variables (with secure default fallback for local/test runtimes)
-const ADMIN_USERNAME = process.env.IRAQ_ADMIN_USERNAME || "asamali";
-const ADMIN_PASSWORD = process.env.IRAQ_ADMIN_PASSWORD || "AsamasaM12";
-const ADMIN_PHONE = "07801459424";
+// Admin credentials & security configuration
 const ADMIN_TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || crypto.randomBytes(32).toString("hex");
+
+// Cryptographic Password Hashing (PBKDF2-SHA256) matching Edge Function
+function hashPasswordSync(password: string): string {
+  const salt = crypto.randomBytes(16);
+  const derived = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
+  return `pbkdf2_sha256$100000$${salt.toString("hex")}$${derived.toString("hex")}`;
+}
+
+function verifyPasswordSync(password: string, storedHash: string): boolean {
+  if (!storedHash || typeof storedHash !== "string") return false;
+  if (storedHash.startsWith("pbkdf2_sha256$")) {
+    const parts = storedHash.split("$");
+    if (parts.length !== 4) return false;
+    const iterations = parseInt(parts[1], 10);
+    const salt = Buffer.from(parts[2], "hex");
+    const originalHash = parts[3];
+    const derived = crypto.pbkdf2Sync(password, salt, iterations, 32, "sha256");
+    return crypto.timingSafeEqual(derived, Buffer.from(originalHash, "hex"));
+  }
+  // Transition check for older unhashed value
+  return storedHash === password;
+}
+
+function hashOtpSync(otp: string, salt: string): string {
+  return crypto.createHash("sha256").update(`${otp}:${salt}`).digest("hex");
+}
 
 // In-memory token store for authenticated admin sessions
 const activeAdminSessions = new Map<string, { username: string; createdAt: number; expiresAt: number }>();
 
 // Anti-brute force rate limiting for admin login (Max 5 attempts per 10 minutes)
 const adminLoginAttempts = new Map<string, { count: number; lastAttempt: number }>();
-const adminWhatsappOtps = new Map<string, { code: string; expiresAt: number }>();
+const adminWhatsappOtps = new Map<string, { otpHash: string; expiresAt: number; attempts: number }>();
 
 // In-memory OTP fallback storage with anti-abuse rate limiting
 interface ClaimOtpEntry {
@@ -109,11 +132,9 @@ async function sendWhatsAppOtpMessage(phone: string, otp: string): Promise<{ suc
   }
 
   // If WhatsApp provider credentials are not yet configured in environment:
-  // Note: Never return or log the raw OTP to client!
-  console.log(`[WhatsApp Gateway Info] Provider not configured in environment. Phone: ${intlPhone}`);
   return {
     success: false,
-    error: "خدمة إرسال رمز التحقق عبر الواتساب غير مهيأة حالياً في خادم التطبيق (تتطلب ضبط WHATSAPP_API_TOKEN). يرجى مراجعة إدارة الدليل للتوثيق المباشر.",
+    error: "خدمة التحقق عبر WhatsApp غير مهيأة",
   };
 }
 
@@ -243,10 +264,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     const cleanPass = String(password).trim();
     const cleanPhone = normalizePhoneDigits(phone);
 
-    // Rate limiting check
+    // Rate limiting check: max 5 attempts per 10 minutes
     const now = Date.now();
     const rate = adminLoginAttempts.get(clientIp);
-    if (rate && now - rate.lastAttempt < 10 * 60 * 1000 && rate.count >= 10) {
+    if (rate && now - rate.lastAttempt < 10 * 60 * 1000 && rate.count >= 5) {
       const waitMins = Math.ceil((10 * 60 * 1000 - (now - rate.lastAttempt)) / 60000);
       return res.status(429).json({
         success: false,
@@ -254,7 +275,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       });
     }
 
-    // 1. Check Supabase admin_credentials table
+    // 1. Fetch Supabase admin_credentials record
     let dbUser: any = null;
     const sb = getServerSupabase();
     if (sb) {
@@ -268,224 +289,217 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
           dbUser = data;
         }
       } catch (err) {
-        // Fallback to environment variables
+        // Continue
       }
     }
 
-    const configuredUser = process.env.IRAQ_ADMIN_USERNAME;
-    const configuredPass = process.env.IRAQ_ADMIN_PASSWORD;
-
-    let isValidUser = false;
-    let isValidPass = false;
-    let isValidPhone = false;
-
-    // Check against Supabase DB credentials first
-    if (dbUser) {
-      if (dbUser.username && cleanUser === String(dbUser.username).trim().toLowerCase()) {
-        isValidUser = true;
-      }
-      if (dbUser.password_hash && cleanPass === String(dbUser.password_hash).trim()) {
-        isValidPass = true;
-      }
-      if (dbUser.phone) {
-        const dbPhoneClean = normalizePhoneDigits(dbUser.phone);
-        if (cleanPhone === dbPhoneClean || cleanPhone.endsWith(dbPhoneClean.slice(-9)) || dbPhoneClean.endsWith(cleanPhone.slice(-9))) {
-          isValidPhone = true;
-        }
+    // If no credentials in DB, allow initial bootstrap from environment variables
+    if (!dbUser && sb) {
+      const envUser = process.env.IRAQ_ADMIN_USERNAME;
+      const envPass = process.env.IRAQ_ADMIN_PASSWORD;
+      const envPhone = process.env.IRAQ_ADMIN_PHONE;
+      if (envUser && envPass) {
+        try {
+          const initHash = hashPasswordSync(envPass);
+          const { data: created } = await sb.from("admin_credentials").insert({
+            id: "primary_admin",
+            username: envUser,
+            phone: envPhone || cleanPhone,
+            password_hash: initHash,
+            role: "superadmin",
+          }).select().maybeSingle();
+          if (created) dbUser = created;
+        } catch {}
       }
     }
 
-    // Fallback/additional validation against env and manager credentials
-    if (!isValidUser) {
-      isValidUser =
-        (configuredUser && cleanUser === configuredUser.toLowerCase()) ||
-        cleanUser === "asamali" ||
-        cleanUser === "asamali107" ||
-        cleanUser === "asamali107@gmail.com" ||
-        cleanUser === "admin" ||
-        cleanUser === "manager";
-    }
-
-    if (!isValidPass) {
-      isValidPass =
-        (configuredPass && cleanPass === configuredPass) ||
-        cleanPass === "AsamasaM12" ||
-        cleanPass === "asamali12" ||
-        cleanPass === "AsamAli12" ||
-        cleanPass === "AsamAli107" ||
-        cleanPass === "admin123456" ||
-        cleanPass === "admin123" ||
-        cleanPass === "admin";
-    }
-
-    if (!isValidPhone) {
-      if (
-        cleanPhone.endsWith("7801459424") ||
-        cleanPhone === "07801459424" ||
-        cleanPhone.includes("7801459424")
-      ) {
-        isValidPhone = true;
-      }
-    }
-
-    if (!isValidUser || !isValidPass || !isValidPhone) {
-      const currentCount = rate && now - rate.lastAttempt < 10 * 60 * 1000 ? rate.count + 1 : 1;
-      adminLoginAttempts.set(clientIp, { count: currentCount, lastAttempt: now });
-      const remaining = Math.max(0, 10 - currentCount);
+    if (!dbUser) {
       return res.status(401).json({
         success: false,
-        error: `بيانات المدير غير مطابقة. يرجى التأكد من رقم الهاتف (${cleanPhone}) واسم المستخدم وكلمة المرور. تبقى لديك ${remaining} محاولات.`,
+        error: "لم يتم العثور على إعدادات المدير في قاعدة البيانات.",
       });
+    }
+
+    const isUserMatch = dbUser.username && cleanUser === String(dbUser.username).trim().toLowerCase();
+    const dbPhoneClean = normalizePhoneDigits(dbUser.phone);
+    const isPhoneMatch =
+      cleanPhone === dbPhoneClean ||
+      (dbPhoneClean.length >= 8 && cleanPhone.endsWith(dbPhoneClean.slice(-8))) ||
+      (cleanPhone.length >= 8 && dbPhoneClean.endsWith(cleanPhone.slice(-8)));
+
+    const isPassMatch = verifyPasswordSync(cleanPass, dbUser.password_hash);
+
+    if (!isUserMatch || !isPhoneMatch || !isPassMatch) {
+      const currentCount = rate && now - rate.lastAttempt < 10 * 60 * 1000 ? rate.count + 1 : 1;
+      adminLoginAttempts.set(clientIp, { count: currentCount, lastAttempt: now });
+      const remaining = Math.max(0, 5 - currentCount);
+      return res.status(401).json({
+        success: false,
+        error: `بيانات المدير غير مطابقة. يرجى التأكد من رقم الهاتف واسم المستخدم وكلمة المرور. تبقى لديك ${remaining} محاولات.`,
+      });
+    }
+
+    // Upgrade plaintext legacy password in database to secure PBKDF2 hash
+    if (!dbUser.password_hash.startsWith("pbkdf2_sha256$") && sb) {
+      try {
+        const upgradedHash = hashPasswordSync(cleanPass);
+        await sb.from("admin_credentials").update({
+          password_hash: upgradedHash,
+          updated_at: new Date().toISOString(),
+        }).eq("id", dbUser.id);
+      } catch {}
     }
 
     // Reset failed count on successful credential verification
     adminLoginAttempts.delete(clientIp);
 
-    // All credentials are valid! Generate 6-digit OTP for WhatsApp
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes validity
+    // Generate cryptographic 6-digit OTP using crypto.randomInt
+    const code = crypto.randomInt(100000, 1000000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes validity
+    const codeHash = hashOtpSync(code, ADMIN_TOKEN_SECRET);
 
-    // Store in all phone formats for seamless lookup
-    adminWhatsappOtps.set(cleanPhone, { code, expiresAt });
-    adminWhatsappOtps.set("07801459424", { code, expiresAt });
-    adminWhatsappOtps.set("7801459424", { code, expiresAt });
-    adminWhatsappOtps.set("9647801459424", { code, expiresAt });
-    if (cleanPhone.length >= 9) {
-      adminWhatsappOtps.set(cleanPhone.slice(-9), { code, expiresAt });
-    }
-    if (cleanPhone.length >= 10) {
-      adminWhatsappOtps.set(cleanPhone.slice(-10), { code, expiresAt });
-    }
-    adminWhatsappOtps.set("primary_admin", { code, expiresAt });
-    adminWhatsappOtps.set(cleanUser, { code, expiresAt });
+    // Save in memory store
+    adminWhatsappOtps.set(cleanPhone, { otpHash: codeHash, expiresAt, attempts: 0 });
+    adminWhatsappOtps.set("primary_admin", { otpHash: codeHash, expiresAt, attempts: 0 });
 
-    // Ensure manager credentials and OTP are synced directly to Supabase admin_credentials
+    // Ensure OTP hash is stored in Supabase admin_credentials
     if (sb) {
       try {
-        await sb.from("admin_credentials").upsert({
-          id: "primary_admin",
-          phone: "07801459424",
-          username: "asamali",
-          password_hash: "AsamasaM12",
-          role: "superadmin",
-          otp_code: code,
+        await sb.from("admin_credentials").update({
+          otp_code_hash: codeHash,
           otp_expires_at: expiresAt,
           updated_at: new Date().toISOString(),
-        }, { onConflict: "id" });
+        }).eq("id", dbUser.id);
       } catch (sbErr) {
         console.warn("Supabase admin_credentials sync warning:", sbErr);
       }
     }
 
-    const waPhoneFormatted = cleanPhone.startsWith("0")
-      ? "964" + cleanPhone.slice(1)
-      : cleanPhone.startsWith("964")
-      ? cleanPhone
-      : "9647801459424";
+    const targetPhone = dbUser.phone || cleanPhone;
+    const sendResult = await sendWhatsAppOtpMessage(targetPhone, code);
 
-    const waText = encodeURIComponent(
-      `🔐 رمز تأكيد دخول مدير تطبيق دليل العراق:\nالرمز: ${code}\nيرجى نسخ هذا الرمز ولصقه في التطبيق لإثبات ملكية الهاتف وفتح صلاحيات المدير.\nالتوقيت: ${new Date().toLocaleTimeString('ar-IQ')}`
-    );
-    const whatsappUrl = `https://api.whatsapp.com/send?phone=${waPhoneFormatted}&text=${waText}`;
-    const whatsappNativeUrl = `whatsapp://send?phone=${waPhoneFormatted}&text=${waText}`;
+    if (!sendResult.success) {
+      return res.status(503).json({
+        success: false,
+        error: sendResult.error || "خدمة التحقق عبر WhatsApp غير مهيأة",
+      });
+    }
 
-    // If server has WhatsApp API credentials configured, attempt immediate push message
-    sendWhatsAppOtpMessage(waPhoneFormatted, code).catch((err) => {
-      console.warn("[Admin WhatsApp Push]", err);
-    });
-
+    // The raw OTP code is NEVER sent to the client!
     res.json({
       success: true,
       step: "otp_required",
-      phone: cleanPhone,
-      code,
-      whatsappUrl,
-      whatsappNativeUrl,
-      message: "تم التحقق من صحة البيانات بنجاح! تم إرسال رمز التحقق إلى الواتساب على رقمك.",
+      message: "تم التحقق من صحة البيانات بنجاح! تم إرسال رمز التحقق إلى واتساب هاتفك.",
     });
   });
 
   // Step 2: Final Verification (Phone + Username + Password + WhatsApp OTP) -> Unlocks Admin
   app.post("/api/admin/login", async (req: Request, res: Response) => {
-    const { username, password, phone, whatsappOtp } = req.body;
+    const { username, password, phone, whatsappOtp, otp } = req.body;
     const clientIp = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "client";
 
-    if (!username || !password || !phone) {
+    if (!username || !password) {
       return res.status(400).json({ success: false, error: "بيانات تسجيل الدخول غير مكتملة." });
     }
 
     const cleanUser = String(username).trim().toLowerCase();
     const cleanPass = String(password).trim();
     const cleanPhone = normalizePhoneDigits(phone);
-    const cleanOtp = normalizePhoneDigits(whatsappOtp);
+    const cleanOtp = normalizePhoneDigits(whatsappOtp || otp);
 
-    // Require OTP to prove phone ownership
     if (!cleanOtp || cleanOtp.length < 4) {
       return res.status(400).json({
         success: false,
-        error: "رمز التحقق عبر واتساب مطلوب لإثبات أن هذا هو رقم هاتفك الحقيقي وفتح الصلاحيات.",
+        error: "رمز التحقق عبر واتساب مطلوب لإثبات ملكية الهاتف وفتح الصلاحيات.",
       });
     }
 
-    // Verify WhatsApp OTP from memory or Supabase
-    let storedOtp =
-      adminWhatsappOtps.get(cleanPhone) ||
-      adminWhatsappOtps.get("07801459424") ||
-      adminWhatsappOtps.get("7801459424") ||
-      adminWhatsappOtps.get("9647801459424") ||
-      (cleanPhone.length >= 9 ? adminWhatsappOtps.get(cleanPhone.slice(-9)) : undefined) ||
-      (cleanPhone.length >= 10 ? adminWhatsappOtps.get(cleanPhone.slice(-10)) : undefined) ||
-      adminWhatsappOtps.get(cleanUser) ||
-      adminWhatsappOtps.get("primary_admin");
-
-    // Supabase fallback if memory OTP was lost (e.g. server restart)
-    if (!storedOtp) {
-      const sb = getServerSupabase();
-      if (sb) {
-        try {
-          const { data } = await sb
-            .from("admin_credentials")
-            .select("otp_code, otp_expires_at")
-            .eq("id", "primary_admin")
-            .maybeSingle();
-          if (data && data.otp_code) {
-            storedOtp = {
-              code: String(data.otp_code),
-              expiresAt: Number(data.otp_expires_at || 0),
-            };
-          }
-        } catch {}
-      }
+    const sb = getServerSupabase();
+    let dbUser: any = null;
+    if (sb) {
+      try {
+        const { data } = await sb.from("admin_credentials").select("*").limit(1).maybeSingle();
+        if (data) dbUser = data;
+      } catch {}
     }
 
-    const isCodeMatch =
-      storedOtp &&
-      (storedOtp.code === cleanOtp ||
-        storedOtp.code === String(whatsappOtp).trim() ||
-        normalizePhoneDigits(storedOtp.code) === cleanOtp);
+    if (!dbUser) {
+      return res.status(401).json({ success: false, error: "بيانات الاعتماد غير موجودة." });
+    }
 
-    if (!storedOtp || storedOtp.expiresAt < Date.now() || !isCodeMatch) {
+    const isUserMatch = dbUser.username && cleanUser === String(dbUser.username).trim().toLowerCase();
+    const isPassMatch = verifyPasswordSync(cleanPass, dbUser.password_hash);
+
+    if (!isUserMatch || !isPassMatch) {
+      return res.status(401).json({ success: false, error: "اسم المستخدم أو كلمة المرور غير صحيحة." });
+    }
+
+    // Verify WhatsApp OTP from memory or Supabase
+    let storedOtp = adminWhatsappOtps.get(cleanPhone) || adminWhatsappOtps.get("primary_admin");
+
+    if (!storedOtp && dbUser.otp_code_hash && dbUser.otp_expires_at) {
+      storedOtp = {
+        otpHash: String(dbUser.otp_code_hash),
+        expiresAt: Number(dbUser.otp_expires_at),
+        attempts: 0,
+      };
+    }
+
+    if (!storedOtp) {
+      return res.status(400).json({
+        success: false,
+        error: "لم يتم العثور على طلب تحقق نشط لهذا الرقم. يرجى طلب رمز جديد.",
+      });
+    }
+
+    if (Date.now() > storedOtp.expiresAt) {
+      adminWhatsappOtps.delete(cleanPhone);
+      adminWhatsappOtps.delete("primary_admin");
+      return res.status(400).json({
+        success: false,
+        error: "انتهت صلاحية رمز التحقق (أكثر من 5 دقائق). يرجى طلب رمز جديد.",
+      });
+    }
+
+    const inputHash = hashOtpSync(cleanOtp, ADMIN_TOKEN_SECRET);
+    if (storedOtp.otpHash !== inputHash) {
+      storedOtp.attempts = (storedOtp.attempts || 0) + 1;
+      const remaining = Math.max(0, 3 - storedOtp.attempts);
+      if (storedOtp.attempts >= 3) {
+        adminWhatsappOtps.delete(cleanPhone);
+        adminWhatsappOtps.delete("primary_admin");
+        return res.status(429).json({
+          success: false,
+          error: "تم تجاوز عدد المحاولات الخاطئة لهذا الرمز. يرجى طلب رمز جديد.",
+        });
+      }
       return res.status(401).json({
         success: false,
-        error: "رمز التحقق عبر واتساب غير صحيح أو انتهت صلاحيته. يرجى إدخال الرمز الصحيح.",
+        error: `رمز التحقق عبر واتساب غير صحيح. تبقى لديك ${remaining} محاولة.`,
       });
     }
 
     // Clean consumed OTP
-    adminWhatsappOtps.delete("07801459424");
     adminWhatsappOtps.delete(cleanPhone);
-    adminWhatsappOtps.delete("7801459424");
-    adminWhatsappOtps.delete("9647801459424");
-    adminWhatsappOtps.delete(cleanUser);
     adminWhatsappOtps.delete("primary_admin");
     adminLoginAttempts.delete(clientIp);
+
+    if (sb) {
+      try {
+        await sb.from("admin_credentials").update({
+          otp_code_hash: null,
+          otp_expires_at: null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", dbUser.id);
+      } catch {}
+    }
 
     // Generate secure session token (24 hours validity)
     const sessionToken = "adm_" + crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
 
     activeAdminSessions.set(sessionToken, {
-      username: cleanUser || "asamali",
+      username: dbUser.username,
       createdAt: Date.now(),
       expiresAt,
     });
@@ -495,34 +509,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
       token: sessionToken,
       expiresAt,
       user: {
-        username: cleanUser || "asamali",
-        phone: cleanPhone || "07801459424",
+        username: dbUser.username,
+        phone: dbUser.phone,
       },
-      message: "تم التحقق من رقم الهاتف بنجاح وفتح صلاحيات المدير العام 🇮🇶",
-    });
-  });
-
-  // Request WhatsApp confirmation link/code for Manager (utility endpoint)
-  app.post("/api/admin/request-whatsapp-otp", (req: Request, res: Response) => {
-    const { phone } = req.body;
-    const cleanPhone = phone ? String(phone).replace(/\D/g, "") : "07801459424";
-    const targetPhone = cleanPhone.length >= 10 ? cleanPhone : "07801459424";
-
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    adminWhatsappOtps.set(targetPhone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
-    adminWhatsappOtps.set("07801459424", { code, expiresAt: Date.now() + 10 * 60 * 1000 });
-
-    const waPhoneFormatted = targetPhone.startsWith("0") ? "964" + targetPhone.slice(1) : targetPhone;
-    const waText = encodeURIComponent(
-      `🔐 رمز تأكيد دخول مدير تطبيق دليل العراق:\nالرمز: ${code}\nيرجى كتابته في التطبيق لتأكيد الدخول.\nالوقت: ${new Date().toLocaleTimeString('ar-IQ')}`
-    );
-    const whatsappUrl = `https://wa.me/${waPhoneFormatted}?text=${waText}`;
-
-    res.json({
-      success: true,
-      code,
-      whatsappUrl,
-      message: `تم توليد رمز التأكيد بنجاح لرقم المدير ${targetPhone}.`,
+      message: "تم التحقق بنجاح وفتح صلاحيات المدير العام 🇮🇶",
     });
   });
 
@@ -636,91 +626,133 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
   });
 
   // Admin status check (compatible with Edge Function)
-  app.get("/api/admin/status", requireAdminAuth, (req: Request, res: Response) => {
+  app.get("/api/admin/status", requireAdminAuth, async (req: Request, res: Response) => {
     const session = (req as any).adminSession;
-    const username = session?.username || ADMIN_USERNAME || "asamali";
+    let username = session?.username || "admin";
+    let phone = "";
+
+    const sb = getServerSupabase();
+    if (sb) {
+      try {
+        const { data } = await sb.from("admin_credentials").select("username, phone").limit(1).maybeSingle();
+        if (data) {
+          username = data.username || username;
+          phone = data.phone || "";
+        }
+      } catch {}
+    }
+
     res.json({
       success: true,
       loggedIn: true,
       username,
-      phone: "07801459424",
+      phone,
       user: {
         username,
-        phone: "07801459424",
+        phone,
       },
     });
   });
 
   // Admin session refresh
-  app.post("/api/admin/refresh", requireAdminAuth, (_req: Request, res: Response) => {
+  app.post("/api/admin/refresh", requireAdminAuth, (req: Request, res: Response) => {
+    const session = (req as any).adminSession;
     const sessionToken = "adm_" + crypto.randomBytes(32).toString("hex");
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
     activeAdminSessions.set(sessionToken, {
-      username: ADMIN_USERNAME,
+      username: session?.username || "admin",
       createdAt: Date.now(),
       expiresAt,
     });
     res.json({ success: true, token: sessionToken, expiresAt });
   });
 
-  // Admin change password
+  // Admin change password (Secure PBKDF2 hash verification & storage)
   app.post("/api/admin/change-password", requireAdminAuth, async (req: Request, res: Response) => {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword || newPassword.length < 6) {
       return res.status(400).json({ success: false, error: "كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل." });
     }
-    if (currentPassword !== ADMIN_PASSWORD && currentPassword !== (process.env.IRAQ_ADMIN_PASSWORD || "AsamasaM12")) {
-      return res.status(401).json({ success: false, error: "كلمة المرور الحالية غير صحيحة." });
-    }
-    // Update active memory
-    (process.env as any).IRAQ_ADMIN_PASSWORD = newPassword;
-    
-    // Also sync to Supabase admin_credentials
+
     const sb = getServerSupabase();
-    if (sb) {
-      try {
-        await sb.from("admin_credentials").upsert({
-          id: "primary_admin",
-          password_hash: newPassword,
-          updated_at: new Date().toISOString(),
-        });
-      } catch (err) {
-        console.warn("Could not sync new password to Supabase admin_credentials:", err);
-      }
+    if (!sb) {
+      return res.status(500).json({ success: false, error: "قاعدة البيانات غير متصلة لحفظ كلمة المرور." });
     }
 
-    res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح وحفظها." });
+    const { data: adminRecord, error: fetchErr } = await sb
+      .from("admin_credentials")
+      .select("*")
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchErr || !adminRecord) {
+      return res.status(500).json({ success: false, error: "تعذر استرجاع بيانات المدير من قاعدة البيانات." });
+    }
+
+    const isCurrentMatch = verifyPasswordSync(currentPassword, adminRecord.password_hash);
+    if (!isCurrentMatch) {
+      return res.status(401).json({ success: false, error: "كلمة المرور الحالية غير صحيحة." });
+    }
+
+    // Hash new password using PBKDF2
+    const newHash = hashPasswordSync(newPassword);
+
+    const { error: updErr } = await sb
+      .from("admin_credentials")
+      .update({
+        password_hash: newHash,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", adminRecord.id);
+
+    if (updErr) {
+      return res.status(500).json({
+        success: false,
+        error: `فشل حفظ كلمة المرور في قاعدة البيانات: ${updErr.message}`,
+      });
+    }
+
+    res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح وحفظها في قاعدة البيانات." });
   });
 
   // Admin update credentials (Phone, Username, Password) in Supabase
   app.post("/api/admin/credentials/update", requireAdminAuth, async (req: Request, res: Response) => {
     const { currentPassword, newPhone, newUsername, newPassword } = req.body;
-    if (currentPassword && currentPassword !== ADMIN_PASSWORD && currentPassword !== (process.env.IRAQ_ADMIN_PASSWORD || "AsamasaM12")) {
-      return res.status(401).json({ success: false, error: "كلمة المرور الحالية غير صحيحة لتأكيد التحديث." });
-    }
 
     const sb = getServerSupabase();
-    if (sb) {
-      try {
-        const updateData: any = {
-          id: "primary_admin",
-          updated_at: new Date().toISOString(),
-        };
-        if (newPhone) updateData.phone = newPhone;
-        if (newUsername) updateData.username = newUsername;
-        if (newPassword && newPassword.length >= 6) updateData.password_hash = newPassword;
+    if (!sb) {
+      return res.status(500).json({ success: false, error: "قاعدة البيانات غير متصلة." });
+    }
 
-        await sb.from("admin_credentials").upsert(updateData);
-      } catch (err) {
-        console.warn("Error updating Supabase admin_credentials:", err);
+    const { data: adminRecord } = await sb
+      .from("admin_credentials")
+      .select("*")
+      .limit(1)
+      .maybeSingle();
+
+    if (!adminRecord) {
+      return res.status(500).json({ success: false, error: "سجل المدير غير موجود في قاعدة البيانات." });
+    }
+
+    if (currentPassword) {
+      const isCurrentMatch = verifyPasswordSync(currentPassword, adminRecord.password_hash);
+      if (!isCurrentMatch) {
+        return res.status(401).json({ success: false, error: "كلمة المرور الحالية غير صحيحة لتأكيد التحديث." });
       }
     }
 
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    };
+    if (newPhone) updateData.phone = normalizePhoneDigits(newPhone);
+    if (newUsername) updateData.username = String(newUsername).trim();
     if (newPassword && newPassword.length >= 6) {
-      (process.env as any).IRAQ_ADMIN_PASSWORD = newPassword;
+      updateData.password_hash = hashPasswordSync(newPassword);
     }
-    if (newUsername) {
-      (process.env as any).IRAQ_ADMIN_USERNAME = newUsername;
+
+    const { error: updErr } = await sb.from("admin_credentials").update(updateData).eq("id", adminRecord.id);
+    if (updErr) {
+      return res.status(500).json({ success: false, error: updErr.message });
     }
 
     res.json({ success: true, message: "تم تحديث بيانات المدير وحفظها في قاعدة البيانات بنجاح." });
@@ -1781,6 +1813,55 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     });
   });
 
+  // POST /api/notifications/read: Persist read notifications
+  app.post("/api/notifications/read", async (req: Request, res: Response) => {
+    const { notificationId, notificationIds, userId = "user" } = req.body || {};
+    const ids: string[] = notificationIds || (notificationId ? [notificationId] : []);
+    const sb = getServerSupabase();
+    if (sb && ids.length > 0) {
+      const rows = ids.map((nid) => ({
+        id: `read_${userId}_${nid}`,
+        user_id: userId,
+        notification_id: nid,
+        read_at: new Date().toISOString(),
+      }));
+      await sb.from("notification_reads").upsert(rows, { onConflict: "id" }).catch(() => {});
+    }
+    return res.json({ success: true, count: ids.length });
+  });
+
+  // POST /api/reports: Submit store report from visitor
+  app.post("/api/reports", async (req: Request, res: Response) => {
+    const { storeId, storeName, storePhone, reason, details, reporterName, reporterPhone } = req.body || {};
+    const reportId = `rep_${Date.now()}`;
+    const sb = getServerSupabase();
+    if (sb) {
+      await sb.from("reports").insert({
+        id: reportId,
+        store_id: storeId || null,
+        store_name: storeName || "",
+        store_phone: storePhone || "",
+        reason: reason || "بلاغ عام",
+        details: details || "",
+        reporter_name: reporterName || "زائر",
+        reporter_phone: reporterPhone || null,
+        status: "pending",
+        created_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+    return res.json({ success: true, reportId });
+  });
+
+  // GET /api/reports: Fetch store reports (Admin only)
+  app.get("/api/reports", requireAdminAuth, async (_req: Request, res: Response) => {
+    const sb = getServerSupabase();
+    if (!sb) {
+      return res.status(503).json({ success: false, error: "قاعدة البيانات غير متصلة." });
+    }
+    const { data } = await sb.from("reports").select("*").order("created_at", { ascending: false }).limit(100);
+    return res.json({ success: true, reports: data || [] });
+  });
+
   // 7. WALLET & TRANSACTIONS ENDPOINTS (SECURED: Admin / Authorized Only)
   app.get("/api/wallet", requireAdminAuth, async (req: Request, res: Response) => {
     const walletId = (req.query.walletId as string) || (req.query.userId as string) || "main_wallet";
@@ -2239,6 +2320,107 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
     }
   });
 
+  // 8.9. AI COLORING & ASSISTANT ENDPOINTS (Uses GEMINI_API_KEY from environment)
+  app.post("/api/chat", async (req: Request, res: Response) => {
+    try {
+      const { messages = [], systemInstruction, childName, theme } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (apiKey && apiKey.length > 5) {
+        try {
+          const ai = getGenAI();
+          const contents = messages.map((m: any) => ({
+            role: m.role === "user" ? "user" : "model",
+            parts: [{ text: String(m.text || "") }],
+          }));
+
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents,
+            config: systemInstruction ? { systemInstruction } : undefined,
+          });
+
+          if (response && response.text) {
+            return res.json({ success: true, text: response.text });
+          }
+        } catch (aiErr) {
+          console.warn("[Server Gemini Chat Error]", aiErr);
+        }
+      }
+
+      const fallbackText = `مرحباً بك وبالمبدع الصغير ${childName || ""} في عالم التلوين والقصص! فكرة رائعة لموضوع "${theme || "المغامرات"}": يمكننا رسم مشهد واضح بخطوط عريضة يسهل تلوينها مع شخصيات لطيفة ومبهجة.`;
+      res.json({ success: true, text: fallbackText });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || "حدث خطأ أثناء معالجة المحادثة." });
+    }
+  });
+
+  app.post("/api/regenerate-prompt", async (req: Request, res: Response) => {
+    try {
+      const { pageTitle, currentCaption, userInstructions, childName, theme } = req.body;
+      const apiKey = process.env.GEMINI_API_KEY;
+
+      if (apiKey && apiKey.length > 5) {
+        try {
+          const ai = getGenAI();
+          const promptQuery = `You are a children coloring book creator. Given page: "${pageTitle}", current caption: "${currentCaption}", user instructions: "${userInstructions}", child: "${childName}", theme: "${theme}". Return valid JSON with keys: title, caption, prompt. The prompt must be high-contrast, black and white thick line art for kids coloring page.`;
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: promptQuery,
+            config: { responseMimeType: "application/json" },
+          });
+
+          if (response && response.text) {
+            const parsed = JSON.parse(response.text);
+            return res.json({
+              success: true,
+              data: {
+                title: parsed.title || pageTitle || "صفحة تلوين ممتعة",
+                caption: parsed.caption || currentCaption || "مغامرة تلوين شيقة للأطفال",
+                prompt: parsed.prompt || `Thick black and white line art coloring page of ${theme || "adventure"}, simple shapes, high contrast, clean outlines`,
+              },
+            });
+          }
+        } catch (aiErr) {
+          console.warn("[Server Gemini Regenerate Error]", aiErr);
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          title: pageTitle || "صفحة تلوين مرحة",
+          caption: userInstructions ? `مشهد جديد: ${userInstructions}` : currentCaption || "مغامرة تلوين رائعة للأطفال",
+          prompt: `High-contrast black and white clean line art coloring book page for children, ${userInstructions || theme || "happy adventure"}, bold outlines, no grayscale shading`,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || "حدث خطأ أثناء تجديد الصفحة." });
+    }
+  });
+
+  app.post("/api/generate-image", async (req: Request, res: Response) => {
+    try {
+      const { prompt, theme } = req.body;
+      const cleanThemeText = String(theme || prompt || "تلوين مرح").slice(0, 30);
+      const svgFallback = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+        <rect width="500" height="500" fill="#ffffff" stroke="#1e293b" stroke-width="8"/>
+        <circle cx="250" cy="200" r="90" fill="none" stroke="#0f172a" stroke-width="6"/>
+        <circle cx="215" cy="185" r="12" fill="#0f172a"/>
+        <circle cx="285" cy="185" r="12" fill="#0f172a"/>
+        <path d="M 210 230 Q 250 270 290 230" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+        <path d="M 170 330 C 170 270, 330 270, 330 330 L 330 420 L 170 420 Z" fill="none" stroke="#0f172a" stroke-width="6"/>
+        <circle cx="100" cy="100" r="30" fill="none" stroke="#0f172a" stroke-width="5"/>
+        <circle cx="400" cy="100" r="30" fill="none" stroke="#0f172a" stroke-width="5"/>
+        <text x="250" y="465" font-size="20" font-family="sans-serif" font-weight="bold" fill="#0f172a" text-anchor="middle">${cleanThemeText}</text>
+      </svg>`;
+      const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgFallback)}`;
+      res.json({ success: true, imageUrl: dataUrl });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message || "حدث خطأ أثناء رسم الصورة." });
+    }
+  });
+
   // 9. COMPLETE SUPABASE SQL SCHEMA (13 Tables, RLS, Indexes, Triggers)
   app.get("/api/supabase-sql", (_req: Request, res: Response) => {
     const sqlScript = `
@@ -2545,15 +2727,30 @@ CREATE POLICY "Service Role Full Access Admin" ON public.admin_credentials FOR A
     const sb = getServerSupabase();
     if (!sb) return;
     try {
-      await sb.from("admin_credentials").upsert({
-        id: "primary_admin",
-        phone: "07801459424",
-        username: "asamali",
-        password_hash: "AsamasaM12",
-        role: "superadmin",
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "id" });
-      console.log("✅ Synced manager credentials (07801459424 / asamali) into Supabase admin_credentials");
+      const { data } = await sb.from("admin_credentials").select("id, password_hash").eq("id", "primary_admin").maybeSingle();
+      if (!data) {
+        const envUser = process.env.IRAQ_ADMIN_USERNAME;
+        const envPass = process.env.IRAQ_ADMIN_PASSWORD;
+        const envPhone = process.env.IRAQ_ADMIN_PHONE || "";
+        if (envUser && envPass) {
+          const hash = hashPasswordSync(envPass);
+          await sb.from("admin_credentials").insert({
+            id: "primary_admin",
+            phone: envPhone,
+            username: envUser,
+            password_hash: hash,
+            role: "superadmin",
+            updated_at: new Date().toISOString(),
+          });
+        }
+      } else if (data.password_hash && !data.password_hash.startsWith("pbkdf2_sha256$")) {
+        // Upgrade legacy unhashed password in database to secure PBKDF2 hash
+        const upgraded = hashPasswordSync(data.password_hash);
+        await sb.from("admin_credentials").update({
+          password_hash: upgraded,
+          updated_at: new Date().toISOString(),
+        }).eq("id", "primary_admin");
+      }
     } catch (e) {
       // Non-critical background seed
     }

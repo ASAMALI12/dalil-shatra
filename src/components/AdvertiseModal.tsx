@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
@@ -22,6 +22,7 @@ import { useWallet } from '../context/WalletContext';
 import { useNotification } from '../context/NotificationContext';
 import { PaymentMethod } from '../types/shatrah';
 import { useLocation } from '../context/LocationContext';
+import { safeApiFetch } from '../utils/apiClient';
 
 interface AdvertiseModalProps {
   isOpen: boolean;
@@ -48,13 +49,29 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
   const [referenceCode, setReferenceCode] = useState('');
   const [detailsError, setDetailsError] = useState('');
   const [paymentError, setPaymentError] = useState('');
+  const [zainNumber, setZainNumber] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      safeApiFetch('/api/payment-details')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.success && data.zaincash?.number) {
+            setZainNumber(data.zaincash.number);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const handleCopyZainNumber = () => {
-    navigator.clipboard.writeText('07801459424');
-    setCopiedZainNumber(true);
-    setTimeout(() => setCopiedZainNumber(false), 2500);
+    if (zainNumber) {
+      navigator.clipboard.writeText(zainNumber);
+      setCopiedZainNumber(true);
+      setTimeout(() => setCopiedZainNumber(false), 2500);
+    }
   };
 
   const plans = [
@@ -353,7 +370,7 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
                       required
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="07801234567"
+                      placeholder="0780xxxxxxx"
                       className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-display text-xs text-slate-800 focus:border-red-500 focus:outline-none"
                     />
                   </div>
@@ -439,7 +456,7 @@ export const AdvertiseModal: React.FC<AdvertiseModalProps> = ({ isOpen, onClose 
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-amber-400" />
                         <span className="font-mono text-base font-black tracking-wider text-amber-300" dir="ltr">
-                          07801459424
+                          {zainNumber || 'المحفظة المعتمدة'}
                         </span>
                       </div>
 

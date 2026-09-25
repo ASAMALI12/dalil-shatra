@@ -45,7 +45,7 @@ interface WalletContextType {
     newPhone?: string,
     newUsername?: string,
     newPassword?: string
-  ) => { success: boolean; message?: string };
+  ) => Promise<{ success: boolean; message?: string }>;
   // Legacy stubs kept for backwards compatibility without simulated state mutations
   setCustomBalance: (newBalance: number) => void;
   resetBalance: () => void;
@@ -95,8 +95,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (res.ok && res.data && res.data.loggedIn) {
         setIsManagerUnlocked(true);
         setManagerCredentials({
-          phone: res.data.phone || '07801459424',
-          username: res.data.username || 'asamali',
+          phone: res.data.phone || '',
+          username: res.data.username || '',
         });
         setIsVerifyingAuth(false);
         return true;
@@ -193,8 +193,8 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   ): { success: boolean; message?: string } => {
     setIsManagerUnlocked(true);
     setManagerCredentials({
-      phone: (phone || '07801459424').trim(),
-      username: (username || 'asamali').trim(),
+      phone: (phone || '').trim(),
+      username: (username || '').trim(),
     });
     return { success: true, message: 'تم التحقق وتأكيد جلسة المدير بنجاح!' };
   };
@@ -225,18 +225,46 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
-  const updateManagerCredentials = (
-    _currentPassword?: string,
+  const updateManagerCredentials = async (
+    currentPassword?: string,
     newPhone?: string,
     newUsername?: string,
-    _newPassword?: string
-  ): { success: boolean; message?: string } => {
-    const updated = {
-      phone: (newPhone || managerCredentials.phone).trim(),
-      username: (newUsername || managerCredentials.username).trim(),
-    };
-    setManagerCredentials(updated);
-    return { success: true, message: 'تم تحديث بيانات العرض بنجاح.' };
+    newPassword?: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      let token: string | null = null;
+      try {
+        token = sessionStorage.getItem('iraq_admin_token') || localStorage.getItem('iraq_admin_token');
+      } catch {}
+
+      const res = await safeApiFetch('/api/admin/credentials/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token || ''}`,
+          'x-admin-token': token || '',
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPhone,
+          newUsername,
+          newPassword,
+        }),
+      });
+
+      const data = res.data || (typeof res.json === 'function' ? await res.json() : null);
+      if (res.ok && data?.success) {
+        const updated = {
+          phone: (newPhone || managerCredentials.phone).trim(),
+          username: (newUsername || managerCredentials.username).trim(),
+        };
+        setManagerCredentials(updated);
+        return { success: true, message: data.message || 'تم تحديث بيانات المدير وحفظها بنجاح.' };
+      }
+      return { success: false, message: data?.error || res.error || 'فشل تحديث بيانات المدير في السيرفر.' };
+    } catch {
+      return { success: false, message: 'تعذر الاتصال بالسيرفر لتحديث البيانات.' };
+    }
   };
 
   // Fake Internal Wallet Operations are strictly deprecated

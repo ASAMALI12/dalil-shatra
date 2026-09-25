@@ -360,7 +360,7 @@ export const OpenStoreModal: React.FC<OpenStoreModalProps> = ({
                     required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="مثال: 07801234567 أو 0770xxxxxxx"
+                    placeholder="مثال: 0780xxxxxxx أو 0770xxxxxxx"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pr-9 pl-3 text-xs font-mono font-bold text-slate-800 focus:border-red-500 focus:bg-white focus:outline-none text-left"
                     dir="ltr"
                   />
