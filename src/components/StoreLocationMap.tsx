@@ -84,9 +84,9 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
     ? item.address!.trim()
     : 'لم يتم تحديد العنوان التفصيلي بعد (يُترك للمالك الموثق لإضافة العنوان الصحيح)';
 
-  // Build accurate Google Maps URLs
+  // Build accurate Google Maps Search URL
   // 1. If store has a custom Google Maps URL provided by owner, prioritize it
-  // 2. Search Google Maps using store name + address + city for genuine place matching
+  // 2. Search Google Maps using store name + address + city for genuine place matching in Google Maps
   const googleMapsSearchUrl = item.googleMapsUrl?.trim()
     ? item.googleMapsUrl.trim()
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -95,8 +95,17 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
           .join(' ')
       )}`;
 
-  // Navigation directions directly to resolved coordinates
-  const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapLat},${mapLng}`;
+  // Accurate directions route to the store (رسم المسار المباشر للمتجر في خرائط Google):
+  // 1. If GPS is confirmed, route directly to precise coordinates
+  // 2. Otherwise route using store name + address + city for accurate real-world road navigation
+  const destinationQuery = hasExactGps
+    ? `${mapLat},${mapLng}`
+    : encodeURIComponent(
+        [item.name, hasAddress ? item.address : null, item.districtName, item.governorateName, 'العراق']
+          .filter(Boolean)
+          .join(' ')
+      );
+  const googleMapsDirectionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destinationQuery}`;
 
   // OpenStreetMap embed iframe URL with pin marker
   const delta = isExpanded ? 0.009 : 0.005;
@@ -114,9 +123,7 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
   };
 
   const handleCopyLocation = () => {
-    const textToCopy = hasExactGps
-      ? `📍 موقع متجر: ${item.name}\nالعنوان: ${addressText} (${locationLabel})\nإحداثيات GPS: ${mapLat.toFixed(5)}, ${mapLng.toFixed(5)}\nرابط خرائط جوجل:\n${googleMapsSearchUrl}`
-      : `📍 متجر: ${item.name}\nالعنوان: ${addressText} (${locationLabel})\nرابط البحث في خرائط جوجل:\n${googleMapsSearchUrl}`;
+    const textToCopy = `📍 متجر: ${item.name}\nالعنوان: ${addressText} (${locationLabel})\nرابط فتح والبحث عن المتجر في خرائط Google:\n${googleMapsSearchUrl}`;
 
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -304,26 +311,26 @@ export const StoreLocationMap: React.FC<StoreLocationMapProps> = ({
         </div>
       </div>
 
-      {/* Map Navigation & Search Action Buttons */}
+      {/* Google Maps Actions: 1. Driving Route & Directions + 2. Search & View Place */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-        {/* Directions in Google Maps */}
+        {/* Draw Driving Route / Directions */}
         <button
           type="button"
           onClick={() => handleOpenGoogleMaps(googleMapsDirectionsUrl)}
-          className="flex items-center justify-center gap-2 rounded-xl bg-sky-600 hover:bg-sky-700 active:scale-98 text-white py-2 px-3 text-xs font-black shadow-xs transition-all cursor-pointer"
+          className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700 active:scale-98 text-white py-2.5 px-3 text-xs font-black shadow-xs transition-all cursor-pointer"
         >
           <Navigation className="h-4 w-4" />
-          <span>الاتجاهات والملاحة في خرائط Google</span>
+          <span>رسم المسار والاتجاهات للمتجر 🚗</span>
         </button>
 
         {/* View on Google Maps / Search place */}
         <button
           type="button"
           onClick={() => handleOpenGoogleMaps(googleMapsSearchUrl)}
-          className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-800 border border-slate-200 py-2 px-3 text-xs font-bold transition-all cursor-pointer"
+          className="flex items-center justify-center gap-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-800 border border-slate-200 py-2.5 px-3 text-xs font-bold transition-all cursor-pointer"
         >
           <ExternalLink className="h-4 w-4 text-slate-600" />
-          <span>فتح والبحث عن المتجر في خرائط Google</span>
+          <span>فتح والبحث عن المتجر 🗺️</span>
         </button>
       </div>
     </div>

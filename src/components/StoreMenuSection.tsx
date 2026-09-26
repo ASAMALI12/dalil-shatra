@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { DirectoryItem, StoreMenuItem } from '../types/shatrah';
 import { getStoreMenu } from '../utils/storeMenuHelper';
+import { formatIraqWhatsAppNumber } from '../utils/socialLinks';
 
 interface StoreMenuSectionProps {
   item: DirectoryItem;
@@ -63,7 +64,7 @@ export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
     const phoneToUse = item.whatsapp || item.phone;
     if (!phoneToUse) return;
 
-    const cleanPhone = phoneToUse.replace(/\D/g, '');
+    const cleanPhone = formatIraqWhatsAppNumber(phoneToUse);
     const message = `مرحباً ${item.name}، أود الاستفسار والطلب من قائمتكم:\n- الصنف: ${menuItem.name}\n- السعر: ${menuItem.price}\nهل هذا الصنف متوفر حالياً؟`;
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');
@@ -73,7 +74,7 @@ export const StoreMenuSection: React.FC<StoreMenuSectionProps> = ({
     const phoneToUse = item.whatsapp || item.phone;
     if (!phoneToUse) return;
 
-    const cleanPhone = phoneToUse.replace(/\D/g, '');
+    const cleanPhone = formatIraqWhatsAppNumber(phoneToUse);
     const message = `السلام عليكم ${item.name}، أود الاستفسار عن أحدث قائمة أسعار ومنيو متوفر لديكم والخدمات الحالية.`;
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');

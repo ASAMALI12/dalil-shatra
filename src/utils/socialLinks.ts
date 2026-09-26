@@ -153,6 +153,48 @@ export function formatWebsiteUrl(value?: string | null): string {
 }
 
 /**
+ * تحويل وتنسيق أرقام الهواتف العراقية إلى الصيغة الدولية المعتمدة لدى واتساب (964...)
+ * لضمان عمل روابط ومحادثات واتساب بنسبة 100% دون أي خطأ
+ */
+export function formatIraqWhatsAppNumber(phone?: string | null): string {
+  if (!phone) return '';
+  let digits = String(phone)
+    .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+    .replace(/\D/g, '');
+  if (!digits) return '';
+
+  // إذا كان يبدأ بـ 00964 نحذف 00
+  if (digits.startsWith('00964')) {
+    digits = digits.substring(2);
+  }
+  // إذا كان يبدأ بـ 964
+  if (digits.startsWith('964')) {
+    // إذا كان يحتوي على 0 إضافي بعد 964 مثل 9640780...
+    if (digits.startsWith('9640')) {
+      digits = '964' + digits.substring(4);
+    }
+    return digits;
+  }
+  // إذا كان يبدأ بـ 07 (الصيغة المحلية العراقية مثل 07801234567)
+  if (digits.startsWith('07')) {
+    return '964' + digits.substring(1);
+  }
+  // إذا كان 10 أرقام ويبدأ بـ 7 (مثل 7801234567)
+  if (digits.startsWith('7') && digits.length === 10) {
+    return '964' + digits;
+  }
+  // إذا كان يبدأ بـ 0 (أرقام أرضية أو بادئات أخرى)
+  if (digits.startsWith('0')) {
+    return '964' + digits.substring(1);
+  }
+  // إذا كان رقم محلي 10 أرقام
+  if (digits.length === 10 && !digits.startsWith('964')) {
+    return '964' + digits;
+  }
+  return digits;
+}
+
+/**
  * الحصول على تفاصيل الحساب الاجتماعي كاملة وروابط التطبيق والويب
  */
 export function getSocialAccountDetails(
@@ -245,16 +287,16 @@ export function getSocialAccountDetails(
   }
 
   if (platform === 'whatsapp') {
-    const cleanPhone = trimmed.replace(/\D/g, '');
-    const webUrl = `https://wa.me/${cleanPhone}`;
-    const appDeepLink = `whatsapp://send?phone=${cleanPhone}`;
+    const waNumber = formatIraqWhatsAppNumber(trimmed);
+    const webUrl = `https://wa.me/${waNumber}`;
+    const appDeepLink = `whatsapp://send?phone=${waNumber}`;
     const androidIntent = webUrl;
 
     return {
       platform: 'whatsapp',
       rawValue,
-      cleanHandle: cleanPhone,
-      displayHandle: cleanPhone,
+      cleanHandle: waNumber,
+      displayHandle: waNumber.startsWith('964') ? '0' + waNumber.substring(3) : waNumber,
       appDeepLink,
       androidIntent,
       webUrl,

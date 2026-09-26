@@ -26,6 +26,8 @@ import {
 import { useWallet } from '../context/WalletContext';
 import { useDirectory } from '../context/DirectoryContext';
 import { DirectoryItem } from '../types/shatrah';
+import { safeApiFetch } from '../utils/apiClient';
+import { formatIraqWhatsAppNumber } from '../utils/socialLinks';
 
 interface AccountViewProps {
   onOpenAdModal: () => void;
@@ -51,6 +53,20 @@ export const AccountView: React.FC<AccountViewProps> = ({
   const { isManagerUnlocked, lockManager } = useWallet();
   const { items, claimedStoreIds } = useDirectory();
   const [userName, setUserName] = useState('زائر دليل العراق');
+  const [adminWhatsapp, setAdminWhatsapp] = useState<string>('9647801552399');
+
+  React.useEffect(() => {
+    safeApiFetch('/api/payment-details')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.managerWhatsapp) {
+          setAdminWhatsapp(data.managerWhatsapp);
+        } else if (data?.managerPhone) {
+          setAdminWhatsapp(data.managerPhone);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Filter stores that belong to this user
   const myClaimedStores = items.filter((item) => claimedStoreIds.includes(item.id));
@@ -356,7 +372,7 @@ export const AccountView: React.FC<AccountViewProps> = ({
 
         {/* Contact Administration & Support */}
         <a
-          href="https://wa.me/9647801234567?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%20%D8%A5%D8%AF%D8%A7%D8%B1%D8%A9%20%D8%AF%D9%84%D9%8A%D9%84%20%D8%A7%D9%84%D8%B4%D8%B7%D8%B1%D8%A9%D8%8C%20%D9%84%D8%AF%D9%8A%20%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20/%20%D8%A8%D9%84%D8%A7%D8%BA%20%D8%AD%D9%88%D9%84%20%D8%A7%D9%84%D8%AF%D9%84%D9%8A%D9%84"
+          href={`https://wa.me/${formatIraqWhatsAppNumber(adminWhatsapp)}?text=${encodeURIComponent('السلام عليكم إدارة تطبيق دليل العراق، لدي استفسار / بلاغ حول التطبيق')}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex w-full items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer"

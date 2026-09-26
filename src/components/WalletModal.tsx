@@ -15,6 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { safeApiFetch } from '../utils/apiClient';
+import { formatIraqWhatsAppNumber } from '../utils/socialLinks';
 
 interface WalletModalProps {
   isOpen: boolean;
@@ -138,7 +139,8 @@ export const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose }) => 
         selectedMethod === 'zaincash' ? 'زين كاش' : 'ماستر كارد'
       }. رقم المحوّل: ${senderPhone || paymentConfig.managerPhone || ''}`
     );
-    window.open(`https://wa.me/${paymentConfig.managerWhatsapp}?text=${text}`, '_blank');
+    const targetWa = formatIraqWhatsAppNumber(paymentConfig.managerWhatsapp || paymentConfig.managerPhone || '9647801552399');
+    window.open(`https://wa.me/${targetWa}?text=${text}`, '_blank');
   };
 
   return (

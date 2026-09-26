@@ -87,7 +87,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
   // Manager Login State (Step 1: Credentials -> Step 2: WhatsApp OTP Verification)
   const [loginStep, setLoginStep] = useState<'credentials' | 'otp'>('credentials');
   const [loginPhone, setLoginPhone] = useState('');
-  const [showPhone, setShowPhone] = useState(false);
+  const [showPhone, setShowPhone] = useState(true);
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -141,7 +141,12 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
     e.preventDefault();
     setLoginError('');
 
-    if (!loginPhone.trim() || !loginUsername.trim() || !loginPassword.trim()) {
+    const cleanPhone = loginPhone
+      .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString())
+      .replace(/\s+/g, '')
+      .trim();
+
+    if (!cleanPhone || !loginUsername.trim() || !loginPassword.trim()) {
       setLoginError('يرجى ملء جميع الحقول (رقم الهاتف، واسم المستخدم، وكلمة المرور).');
       return;
     }
@@ -152,7 +157,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: loginPhone.trim(),
+          phone: cleanPhone,
           username: loginUsername.trim(),
           password: loginPassword.trim(),
         }),
@@ -480,24 +485,22 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                 </div>
 
                 <form onSubmit={handleVerifyCredentialsAndSendOtp} className="w-full max-w-sm space-y-3.5 text-right">
-                  {/* 1. Phone Number (Hidden by default for privacy) */}
+                  {/* 1. Phone Number */}
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-1">
-                      رقم هاتف المدير السري *
+                      رقم هاتف المدير *
                     </label>
                     <div className="relative flex items-center">
                       <Phone className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
                       <input
                         type={showPhone ? 'tel' : 'password'}
+                        inputMode="tel"
+                        autoComplete="tel"
                         required
                         value={loginPhone}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
-                          setLoginPhone(val);
-                        }}
-                        placeholder="•••••••••••"
+                        onChange={(e) => setLoginPhone(e.target.value)}
+                        placeholder="0780xxxxxxx"
                         className="w-full rounded-xl border border-slate-700 bg-slate-800/90 py-2.5 pr-9 pl-10 text-xs font-mono font-bold text-white focus:border-red-500 focus:outline-none"
-                        dir="ltr"
                       />
                       <button
                         type="button"
@@ -519,6 +522,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                       <User className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
                       <input
                         type="text"
+                        autoComplete="username"
                         required
                         value={loginUsername}
                         onChange={(e) => setLoginUsername(e.target.value)}
@@ -537,6 +541,7 @@ export const ManagerDashboardModal: React.FC<ManagerDashboardModalProps> = ({
                       <KeyRound className="absolute right-3 h-4 w-4 text-slate-500 pointer-events-none" />
                       <input
                         type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
                         required
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}

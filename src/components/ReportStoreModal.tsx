@@ -140,7 +140,7 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
     // Also save in the system
     handleSubmitReport();
     // Open WhatsApp
-    const targetWhatsapp = (adminWhatsapp || '9647800000000').replace(/[^0-9]/g, '');
+    const targetWhatsapp = (adminWhatsapp ? (adminWhatsapp.startsWith('0') ? '964' + adminWhatsapp.substring(1) : adminWhatsapp) : '9647801552399').replace(/[^0-9]/g, '');
     const url = `https://wa.me/${targetWhatsapp}?text=${generateWhatsAppMessage()}`;
     window.open(url, '_blank');
   };
@@ -153,6 +153,8 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
     setReporterPhone('');
     onClose();
   };
+
+  const formattedAdminWhatsapp = (adminWhatsapp ? (adminWhatsapp.startsWith('0') ? '964' + adminWhatsapp.substring(1) : adminWhatsapp) : '9647801552399').replace(/[^0-9]/g, '');
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -210,7 +212,7 @@ export const ReportStoreModal: React.FC<ReportStoreModalProps> = ({
                 </button>
 
                 <a
-                  href={`https://wa.me/${ADMIN_WHATSAPP}?text=${generateWhatsAppMessage()}`}
+                  href={`https://wa.me/${formattedAdminWhatsapp}?text=${generateWhatsAppMessage()}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full sm:w-auto flex items-center justify-center gap-1.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-3 cursor-pointer transition-all"

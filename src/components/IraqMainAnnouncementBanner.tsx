@@ -26,6 +26,7 @@ import { useLocation } from '../context/LocationContext';
 import { VerifiedStoreAdModal } from './VerifiedStoreAdModal';
 import { DirectoryItem } from '../types/directory';
 import { CategoryAd } from '../types/shatrah';
+import { formatIraqWhatsAppNumber } from '../utils/socialLinks';
 
 interface IraqMainAnnouncementBannerProps {
   onOpenManagerModal?: () => void;
@@ -307,7 +308,7 @@ export const IraqMainAnnouncementBanner: React.FC<IraqMainAnnouncementBannerProp
 
                 {activeItem.ad.whatsapp && (
                   <a
-                    href={`https://wa.me/964${activeItem.ad.whatsapp.replace(/^0+/, '')}`}
+                    href={`https://wa.me/${formatIraqWhatsAppNumber(activeItem.ad.whatsapp)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white px-3 py-2 text-xs font-black shadow-sm transition-all cursor-pointer active:scale-95"
@@ -340,6 +341,7 @@ export const IraqMainAnnouncementBanner: React.FC<IraqMainAnnouncementBannerProp
       <VerifiedStoreAdModal
         isOpen={isVerifiedAdModalOpen}
         onClose={() => setIsVerifiedAdModalOpen(false)}
+        initialScope="national"
         onOpenClaimStore={onOpenClaimStoreModal}
       />
 

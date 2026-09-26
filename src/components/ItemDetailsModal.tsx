@@ -46,6 +46,7 @@ import {
   formatWebsiteUrl,
   openExternalUrl,
   openSocialMediaLink,
+  formatIraqWhatsAppNumber,
 } from '../utils/socialLinks';
 
 interface ItemDetailsModalProps {
@@ -527,7 +528,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
             {/* WhatsApp */}
             {item.whatsapp && (
               <a
-                href={`https://wa.me/${item.whatsapp.replace(/\D/g, '')}`}
+                href={`https://wa.me/${formatIraqWhatsAppNumber(item.whatsapp)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => openSocialMediaLink('whatsapp', item.whatsapp!, item.name, e)}

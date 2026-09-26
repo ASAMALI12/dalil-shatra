@@ -72,6 +72,7 @@ export const SimpleAnimatedAdBanner: React.FC<SimpleAnimatedAdBannerProps> = ({
       <VerifiedStoreAdModal
         isOpen={isAdModalOpen}
         onClose={() => setIsAdModalOpen(false)}
+        initialScope="national"
         onOpenClaimStore={onOpenClaimStoreModal}
       />
     </>
